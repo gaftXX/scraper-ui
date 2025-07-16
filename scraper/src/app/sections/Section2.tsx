@@ -15,6 +15,8 @@ interface Section2Props {
   startScraping: () => void;
   results: any;
   logs: string[];
+  onCompendiumClick: () => void;
+  resetFocusTrigger: number;
 }
 
 const LATVIAN_CITIES = [
@@ -40,7 +42,9 @@ export default function Section2({
   handleCitySelection,
   startScraping,
   results,
-  logs
+  logs,
+  onCompendiumClick,
+  resetFocusTrigger
 }: Section2Props) {
   // Create refs for all cities upfront
   const cityRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -54,12 +58,28 @@ export default function Section2({
   // Add state for scraper focus mode
   const [isScraperFocus, setIsScraperFocus] = useState(false);
 
+  // Add state for dashboard focus mode
+  const [isDashboardFocus, setIsDashboardFocus] = useState(false);
+
   // Add keyboard event listener
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
       // Only allow Shift+S toggle when scraper is not running
       if (event.key.toLowerCase() === 's' && event.shiftKey && progress.status !== 'running') {
         setIsScraperFocus(prev => !prev); // Toggle the state
+        setIsDashboardFocus(false); // Close dashboard focus when opening scraper focus
+      }
+      
+      // Allow Shift+D toggle even when scraper is running
+      if (event.key.toLowerCase() === 'd' && event.shiftKey) {
+        setIsDashboardFocus(prev => !prev); // Toggle the state
+        setIsScraperFocus(false); // Close scraper focus when opening dashboard focus
+      }
+
+      // Start scraper with Enter when in scraper focus and not running
+      if (event.key === 'Enter' && isScraperFocus && progress.status !== 'running' && (config.cities?.length || 0) > 0) {
+        event.preventDefault();
+        startScraping();
       }
     };
 
@@ -67,7 +87,15 @@ export default function Section2({
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, [progress.status]); // Add progress.status as dependency
+  }, [progress.status, isScraperFocus, config.cities?.length]); // Remove startScraping from dependencies
+
+  // Reset focus states when resetFocusTrigger changes
+  useEffect(() => {
+    if (resetFocusTrigger > 0) {
+      setIsScraperFocus(false);
+      setIsDashboardFocus(false);
+    }
+  }, [resetFocusTrigger]);
 
   // Helper function to get intensity level name
   const getIntensityName = (maxResults: number, searchRadius: number): string => {
@@ -228,36 +256,46 @@ export default function Section2({
             }}
           >
             <style jsx global>{`
-                /* City checkbox styles */
-                .city-checkbox {
-                  opacity: 1 !important;
-                  -webkit-appearance: none !important;
-                  -moz-appearance: none !important;
-                  appearance: none !important;
-                  width: 14px !important;
-                  height: 14px !important;
-                  background-color: #393837 !important;
-                  cursor: pointer;
-                  border: none !important;
-                  padding: 0 !important;
-                  margin: 0 !important;
-                  border-radius: 0 !important;
-                  outline: none !important;
-                  box-shadow: none !important;
-                }
+                              /* City radio styles */
+              .city-radio {
+                opacity: 1 !important;
+                -webkit-appearance: none !important;
+                -moz-appearance: none !important;
+                appearance: none !important;
+                width: 14px !important;
+                height: 14px !important;
+                background-color: #393837 !important;
+                cursor: pointer;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                outline: none !important;
+                box-shadow: none !important;
+                transition: background-color 0.3s ease !important;
+              }
 
-                .city-checkbox:checked {
-                  background-color: white !important;
-                }
+              .city-radio:hover {
+                background-color: white !important;
+              }
 
-                .city-letter {
-                  opacity: 1 !important;
-                  color: white !important;
-                }
+              .city-radio:checked {
+                background-color: white !important;
+              }
 
-                .city-checkbox:checked ~ .city-letter {
-                  color: #393837 !important;
-                }
+              .city-letter {
+                opacity: 1 !important;
+                color: white !important;
+                transition: color 0.3s ease !important;
+              }
+
+              .city-radio:hover ~ .city-letter {
+                color: #393837 !important;
+              }
+
+              .city-radio:checked ~ .city-letter {
+                color: #393837 !important;
+              }
 
                 /* Category checkbox styles */
                 .category-checkbox {
@@ -347,10 +385,11 @@ export default function Section2({
                     >
                       <div className="relative" style={{ width: '14px', height: '14px' }}>
                         <input
-                          type="checkbox"
+                          type="radio"
+                          name="city-selection"
                           checked={config.cities?.includes(city) || false}
                           onChange={(e) => handleCitySelection(city, e.target.checked)}
-                          className="city-checkbox absolute inset-0"
+                          className="city-radio absolute inset-0"
                           style={{
                             cursor: isScraperFocus && progress.status !== 'running' ? 'pointer' : 'default'
                           }}
@@ -400,9 +439,59 @@ export default function Section2({
                 style={{
                   width: 'calc(100% - 250px)',
                   right: 0,
-                  opacity: isScraperFocus ? 1 : 0.1
+                  opacity: isDashboardFocus ? 1 : 0.1
                 }}
               />
+            </div>
+            
+            {/* Dashboard button positioned on the right line */}
+            <div 
+              className={`absolute transition-opacity duration-300 ${isDashboardFocus ? 'opacity-100' : 'opacity-0'}`}
+              style={{
+                left: '50px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 3,
+                pointerEvents: isDashboardFocus ? 'auto' : 'none'
+              }}
+            >
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  console.log('Dashboard button clicked');
+                  setIsDashboardFocus(false); // Reset dashboard focus state
+                  setIsScraperFocus(false); // Reset scraper focus state
+                  onCompendiumClick(); // Call the parent handler
+                }}
+                disabled={!isDashboardFocus}
+                className={`transition-colors ${
+                  !isDashboardFocus
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
+                }`}
+                style={{
+                  width: '80px',
+                  height: '15px',
+                  backgroundColor: '#393837',
+                  padding: '0 8px',
+                  border: 'none',
+                  cursor: isDashboardFocus ? 'pointer' : 'not-allowed',
+                  color: 'white',
+                  fontSize: '9px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                type="button"
+                title={!isDashboardFocus ? 'Press Shift+D to enable dashboard mode'
+                  : 'Dashboard Button (Click to interact)'
+                }
+              >
+                COMPENDIUM
+              </button>
             </div>
           </div>
           
@@ -538,8 +627,8 @@ export default function Section2({
 
             {/* Update the global styles for checkboxes */}
             <style jsx global>{`
-              /* City checkbox styles */
-              .city-checkbox {
+              /* City radio styles */
+              .city-radio {
                 opacity: 1 !important;
                 -webkit-appearance: none !important;
                 -moz-appearance: none !important;
@@ -554,9 +643,14 @@ export default function Section2({
                 outline: none !important;
                 box-shadow: none !important;
                 position: relative;
+                transition: background-color 0.3s ease !important;
               }
 
-              .city-checkbox:checked {
+              .city-radio:hover {
+                background-color: white !important;
+              }
+
+              .city-radio:checked {
                 background-color: white !important;
               }
 
@@ -569,9 +663,14 @@ export default function Section2({
                 font-size: 12px;
                 pointer-events: none;
                 opacity: 1 !important;
+                transition: color 0.3s ease !important;
               }
 
-              .city-checkbox:checked ~ .city-letter {
+              .city-radio:hover ~ .city-letter {
+                color: #393837;
+              }
+
+              .city-radio:checked ~ .city-letter {
                 color: #393837;
               }
 
@@ -592,6 +691,11 @@ export default function Section2({
                 box-shadow: none !important;
                 position: relative !important;
                 display: block !important;
+                transition: background-color 0.3s ease !important;
+              }
+
+              .category-checkbox:hover {
+                background-color: white !important;
               }
 
               .category-checkbox:checked {
@@ -613,6 +717,11 @@ export default function Section2({
                 width: auto !important;
                 height: auto !important;
                 line-height: 1 !important;
+                transition: color 0.3s ease !important;
+              }
+
+              .category-checkbox:hover ~ .category-letter {
+                color: #393837 !important;
               }
 
               .category-checkbox:checked ~ .category-letter {
@@ -638,6 +747,7 @@ export default function Section2({
               e.preventDefault();
               console.log('Start Scraping button clicked by user');
               setIsScraperFocus(false); // Reset focus state when scraping starts
+              setIsDashboardFocus(false); // Reset dashboard focus state when scraping starts
               startScraping();
             }}
             disabled={!isScraperFocus || progress.status === 'running' || (config.cities?.length || 0) === 0}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { ScraperConfig, SearchCategory, SEARCH_CATEGORIES, getSearchTermsForCategories } from './types';
 import Section1 from './sections/Section1';
 import Section2 from './sections/Section2';
@@ -76,6 +77,13 @@ export default function ScraperInterface() {
   const [results, setResults] = useState<ScrapingResults | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
+  const [showCompendium, setShowCompendium] = useState(false);
+  const [autoScroll, setAutoScroll] = useState<boolean>(true);
+  const [resetSection2Focus, setResetSection2Focus] = useState<number>(0);
+  
+  // Use a ref to store the latest config to avoid stale closure issues
+  const configRef = useRef<ScraperConfig>(config);
+  configRef.current = config;
 
   // Timer effect to track scraping duration
   useEffect(() => {
@@ -127,6 +135,17 @@ export default function ScraperInterface() {
     }
   }, []); // Empty dependency array = runs only once on mount
 
+  // Debug useEffect to monitor config changes
+  useEffect(() => {
+    console.log('=== DEBUG: Config changed ===');
+    console.log('Cities:', config.cities);
+    console.log('Max Results:', config.maxResults);
+    console.log('Search Radius:', config.searchRadius);
+    console.log('Search Categories:', config.searchCategories);
+    console.log('Intensity Level:', getIntensityLevel(config.maxResults || 20, config.searchRadius || 10));
+    console.log('============================');
+  }, [config]);
+
   // Update the useEffect for fetching estimated time
   useEffect(() => {
     const fetchEstimatedTime = async () => {
@@ -165,21 +184,49 @@ export default function ScraperInterface() {
   };
 
   const handleCitySelection = (city: string, selected: boolean) => {
-    setConfig((prev: ScraperConfig) => ({
-      ...prev,
-      cities: selected 
-        ? [...(prev.cities || []), city]
-        : (prev.cities || []).filter((c: string) => c !== city)
-    }));
+    console.log(`=== DEBUG: handleCitySelection called with city: ${city}, selected: ${selected} ===`);
+    
+    flushSync(() => {
+      setConfig((prev: ScraperConfig) => {
+        const newConfig = {
+          ...prev,
+          cities: selected 
+            ? [city] // Only allow one city at a time
+            : [] // If deselecting, clear all cities
+        };
+        console.log('=== DEBUG: New config after city change ===');
+        console.log('New config:', newConfig);
+        console.log('============================================');
+        return newConfig;
+      });
+    });
   };
 
   const handleCategorySelection = (categoryId: SearchCategory, selected: boolean) => {
-    setConfig((prev: ScraperConfig) => ({
-      ...prev,
-      searchCategories: selected 
-        ? [...(prev.searchCategories || []), categoryId]
-        : (prev.searchCategories || []).filter((c: SearchCategory) => c !== categoryId)
-    }));
+    console.log(`=== DEBUG: handleCategorySelection called with categoryId: ${categoryId}, selected: ${selected} ===`);
+    
+    flushSync(() => {
+      setConfig((prev: ScraperConfig) => {
+        const newConfig = {
+          ...prev,
+          searchCategories: selected 
+            ? [categoryId] // Only allow one category at a time
+            : [] // If deselecting, clear all categories
+        };
+        console.log('=== DEBUG: New config after category change ===');
+        console.log('New config:', newConfig);
+        console.log('===============================================');
+        return newConfig;
+      });
+    });
+  };
+
+  const handleCompendiumClick = () => {
+    setShowCompendium(true);
+  };
+
+  const resetCompendiumState = () => {
+    setShowCompendium(false);
   };
 
   // Helper function to get intensity level from current maxResults and searchRadius
@@ -189,7 +236,7 @@ export default function ScraperInterface() {
     if (maxResults === 30 && searchRadius === 20) return 2;
     if (maxResults === 40 && searchRadius === 30) return 3;
     if (maxResults === 50 && searchRadius === 40) return 4;
-    if (maxResults === 60 && searchRadius === 50) return 5;
+    if (maxResults === 70 && searchRadius === 50) return 5;
     
     // Default to level 2 if no exact match
     return 2;
@@ -197,6 +244,8 @@ export default function ScraperInterface() {
 
   // Helper function to handle intensity changes
   const handleIntensityChange = (intensity: number) => {
+    console.log(`=== DEBUG: handleIntensityChange called with intensity: ${intensity} ===`);
+    
     let maxResults: number;
     let searchRadius: number;
     
@@ -218,7 +267,7 @@ export default function ScraperInterface() {
         searchRadius = 40;
         break;
       case 5:
-        maxResults = 60;  // +10 from original 50
+        maxResults = 70;  // Increased from 60 to 70 for higher intensity
         searchRadius = 50;
         break;
       default:
@@ -226,11 +275,21 @@ export default function ScraperInterface() {
         searchRadius = 20;
     }
     
-    setConfig((prev: ScraperConfig) => ({
-      ...prev,
-      maxResults,
-      searchRadius
-    }));
+    console.log(`Setting maxResults: ${maxResults}, searchRadius: ${searchRadius}`);
+    
+    flushSync(() => {
+      setConfig((prev: ScraperConfig) => {
+        const newConfig = {
+          ...prev,
+          maxResults,
+          searchRadius
+        };
+        console.log('=== DEBUG: New config after intensity change ===');
+        console.log('New config:', newConfig);
+        console.log('===============================================');
+        return newConfig;
+      });
+    });
   };
 
   // Calculate current search terms count based on selected categories
@@ -241,20 +300,16 @@ export default function ScraperInterface() {
       const time = new Date().toLocaleTimeString().replace(/:/g, '');
       const newLogs = [...prev, `${time}: ${message}`];
       
-      // Auto-scroll only if user is currently at the bottom
-      setTimeout(() => {
-        const container = document.getElementById('logs-container');
-        if (container) {
-          const { scrollTop, scrollHeight, clientHeight } = container;
-          const isAtBottom = scrollTop + clientHeight >= scrollHeight - 20;
-          
-          // Only auto-scroll if user is at bottom - this allows new logs to appear 
-          // without disturbing users who have scrolled up to view older logs
-          if (isAtBottom) {
+      // Auto-scroll to bottom if auto-scroll is enabled
+      if (autoScroll) {
+        setTimeout(() => {
+          const container = document.getElementById('logs-container');
+          if (container) {
+            // Always scroll to bottom when auto-scroll is enabled
             container.scrollTop = container.scrollHeight;
           }
-        }
-      }, 100); // Shorter timeout for more responsive scrolling
+        }, 100); // Shorter timeout for more responsive scrolling
+      }
       
       return newLogs;
     });
@@ -266,6 +321,16 @@ export default function ScraperInterface() {
     if (container) {
       container.scrollTop = container.scrollHeight;
     }
+  };
+
+  // Function to toggle auto-scroll
+  const toggleAutoScroll = () => {
+    setAutoScroll(prev => !prev);
+  };
+
+  // Function to reset Section2 focus state
+  const triggerSection2FocusReset = () => {
+    setResetSection2Focus(prev => prev + 1);
   };
 
   // Function to copy all terminal logs to clipboard
@@ -324,17 +389,47 @@ export default function ScraperInterface() {
     }
 
     // Additional safety check - ensure we have cities selected
-    if (!config.cities || config.cities.length === 0) {
+    if (!configRef.current.cities || configRef.current.cities.length === 0) {
       addLog('Cannot start scraper: No cities selected');
       alert('Please select at least one city before starting the scraper.');
       return;
     }
 
+    // No delay needed since we're using flushSync for state updates
+
+    // Debug: Log the current config state from ref
+    console.log('=== DEBUG: Current config state from ref before scraping ===');
+    console.log('Cities:', configRef.current.cities);
+    console.log('Max Results:', configRef.current.maxResults);
+    console.log('Search Radius:', configRef.current.searchRadius);
+    console.log('Search Categories:', configRef.current.searchCategories);
+    console.log('Intensity Level:', getIntensityLevel(configRef.current.maxResults || 20, configRef.current.searchRadius || 10));
+    console.log('==========================================================');
+
+    // Start the actual scraping with the latest config from ref
+    startScrapingWithConfig(configRef.current);
+  };
+
+  const startScrapingWithConfig = async (scrapingConfig: ScraperConfig) => {
+    // Get intensity level name for display
+    const intensityLevel = getIntensityLevel(scrapingConfig.maxResults || 20, scrapingConfig.searchRadius || 10);
+    const getIntensityName = (level: number): string => {
+      switch (level) {
+        case 1: return "LIGHT";
+        case 2: return "MEDIUM";
+        case 3: return "NORMAL";
+        case 4: return "HEAVY";
+        case 5: return "INTENSE";
+        default: return "MEDIUM";
+      }
+    };
+
     // Explicit confirmation dialog for user consent
     const confirmStart = window.confirm(
-      `Start scraping ${config.cities.length} cities with ${config.searchCategories?.length || 0} categories?\n\n` +
-      `Selected cities: ${config.cities.join(', ')}\n` +
-      `Categories: ${config.searchCategories?.join(', ') || 'Default'}\n\n` +
+      `Start scraping ${scrapingConfig.cities?.length || 0} cities with ${scrapingConfig.searchCategories?.length || 0} categories?\n\n` +
+      `Selected cities: ${scrapingConfig.cities?.join(', ') || 'None'}\n` +
+      `Categories: ${scrapingConfig.searchCategories?.join(', ') || 'Default'}\n` +
+      `Intensity Level: ${getIntensityName(intensityLevel)} (${scrapingConfig.maxResults} max results, ${scrapingConfig.searchRadius}km radius)\n\n` +
       `Click OK to proceed or Cancel to abort.`
     );
 
@@ -342,9 +437,14 @@ export default function ScraperInterface() {
       return;
     }
 
-    // Log explicit user action
+    // Log explicit user action and current config
     console.log('User explicitly confirmed and started scraper');
+    console.log('Current config being sent to scraper:', scrapingConfig);
     addLog('User confirmed and started scraper manually');
+    addLog(`Config: ${scrapingConfig.cities?.length || 0} cities, ${scrapingConfig.searchCategories?.length || 0} categories, ${scrapingConfig.maxResults} max results, ${scrapingConfig.searchRadius}km radius`);
+    
+    // Reset Section2 focus state
+    triggerSection2FocusReset();
     
     const startTime = Date.now();
     setProgress((prev: ScrapingProgress) => ({ 
@@ -357,14 +457,12 @@ export default function ScraperInterface() {
     setLogs([]);
     
     try {
-      addLog('Starting scraper...');
-      
       const response = await fetch('/api/scrape', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(config)
+        body: JSON.stringify(scrapingConfig)
       });
 
       if (!response.ok) {
@@ -493,6 +591,8 @@ export default function ScraperInterface() {
             jumpToBottom={jumpToBottom}
             copyTerminalLogs={copyTerminalLogs}
             currentSearchTerms={currentSearchTerms}
+            autoScroll={autoScroll}
+            toggleAutoScroll={toggleAutoScroll}
           />
         </div>
 
@@ -509,12 +609,20 @@ export default function ScraperInterface() {
             startScraping={startScraping}
             results={results}
             logs={logs}
+            onCompendiumClick={handleCompendiumClick}
+            resetFocusTrigger={resetSection2Focus}
           />
         </div>
 
         {/* Section 3: Future Content - 49% width - ALWAYS RIGHT */}
         <div style={{ width: '49%' }}>
-          <Section3 />
+          <Section3 
+            showCompendium={showCompendium}
+            results={results}
+            formatElapsedTime={formatElapsedTime}
+            progress={progress}
+            resetCompendiumState={resetCompendiumState}
+          />
         </div>
       </div>
     </div>

@@ -39,6 +39,8 @@ interface Section1Props {
   jumpToBottom: () => void;
   copyTerminalLogs: () => Promise<void>;
   currentSearchTerms: string[];
+  autoScroll: boolean;
+  toggleAutoScroll: () => void;
 }
 
 export default function Section1({
@@ -50,7 +52,9 @@ export default function Section1({
   formatElapsedTime,
   jumpToBottom,
   copyTerminalLogs,
-  currentSearchTerms
+  currentSearchTerms,
+  autoScroll,
+  toggleAutoScroll
 }: Section1Props) {
   return (
     <div className="col-span-2 h-screen">
@@ -76,10 +80,7 @@ export default function Section1({
 
           {/* Results Summary */}
           {results && (
-            <div className="mb-3">
-              <h3 className="text-lg font-medium mb-2 text-[#ffffff]">
-                Scraping Complete & Uploaded to Firebase
-              </h3>
+            <div>
               <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                 <div>
                   <span className="text-[#ffffff]">Total Offices:</span>
@@ -166,47 +167,23 @@ export default function Section1({
                       <tbody>
                         {Object.entries(officesByCity).map(([city, categoryData]: [string, any], cityIndex: number) => (
                           <React.Fragment key={city}>
-                            {/* City Header */}
-                            <tr className="border-none" style={{ backgroundColor: 'transparent' }}>
-                              <td className={`py-1 pl-[5px] text-[#ffffff] font-bold ${cityIndex === 0 ? '' : 'border-r border-gray-500'}`}>
-                                {city}
-                              </td>
-                              <td className={`py-1 pl-[5px] ${cityIndex === 0 ? '' : 'border-r border-gray-500'}`}></td>
-                              <td className={`py-1 pl-[5px] ${cityIndex === 0 ? '' : 'border-r border-gray-500'}`}></td>
-                              <td className="py-1 pl-[5px]"></td>
-                            </tr>
-                            
-                            {/* Categories within City */}
                             {Object.entries(categoryData).map(([category, offices]: [string, any]) => (
                               <React.Fragment key={`${city}-${category}`}>
-                                {/* Category Header */}
-                                <tr className="border-none" style={{ backgroundColor: 'transparent' }}>
-                                  <td className="py-1 text-[#ffffff] border-r border-gray-500">
-                                    <div className="pl-[9px]">
-                                      {getCategoryName(category)}
-                                    </div>
-                                  </td>
-                                  <td className="py-1 pl-[5px] text-[#ffffff] border-r border-gray-500"></td>
-                                  <td className="py-1 pl-[5px] text-[#ffffff] border-r border-gray-500"></td>
-                                  <td className="py-1 pl-[5px] text-[#ffffff]"></td>
-                                </tr>
-                                
-                                {/* Offices in Category */}
                                 {offices.map((office: any, officeIndex: number) => (
                                   <tr key={`${city}-${category}-${officeIndex}`} className="border-none hover:bg-gray-650 transition-colors" style={{ backgroundColor: 'transparent' }}>
-                                    <td className="py-1 text-[#ffffff] border-r border-gray-500">
+                                    <td className="py-0 text-[#ffffff] border-r border-gray-500">
                                       <div className="pl-[13px]">
                                         <div className="font-medium text-[#ffffff]">{office.name}</div>
                                         {office.phone && <div className="text-xs text-[#ffffff]">Phone: {office.phone}</div>}
                                       </div>
                                     </td>
-                                    <td className="py-1 pl-[5px] text-[#ffffff] border-r border-gray-500">
+                                    <td className="py-0 pl-[5px] text-[#ffffff] border-r border-gray-500">
                                       {office.address || 'No address available'}
                                     </td>
-                                    <td className="py-1 pl-[5px] text-[#ffffff] border-r border-gray-500">
+                                    <td className="py-0 pl-[5px] text-[#ffffff] border-r border-gray-500">
                                       {office.website || '-'}
                                     </td>
-                                    <td className="py-1 pl-[5px] text-[#ffffff]">
+                                    <td className="py-0 pl-[5px] text-[#ffffff]">
                                       {office.existedInDatabase ? (
                                         <div className="flex items-center space-x-1">
                                           <span className="text-[#ffffff] font-medium">Existed</span>
@@ -261,11 +238,11 @@ export default function Section1({
 
         {/* Terminal Block - Now fills remaining height */}
         {!results && (
-          <div className="flex-grow min-h-0 overflow-hidden mt-2">
+          <div className="flex-grow min-h-0 overflow-hidden">
             <div className="h-full flex flex-col">
               {logs.length > 0 && (
                 <>
-                  <div className="flex-none px-2 py-1 flex justify-between items-center">
+                  <div className="flex-none px-2 flex justify-between items-center">
                     <span className="text-sm text-[#ffffff]">Terminal Output</span>
                     <button
                       onClick={copyTerminalLogs}
@@ -286,17 +263,17 @@ export default function Section1({
                       color: #ffffff !important;
                     }
                   `}</style>
-                  <div className="flex-grow min-h-0 overflow-y-auto terminal-output">
+                  <div id="logs-container" className="flex-grow min-h-0 overflow-y-auto terminal-output">
                     <pre className="text-sm font-mono text-[#ffffff] whitespace-pre-wrap">
                       {logs.join('\n')}
                     </pre>
                   </div>
-                  <div className="flex-none px-2 py-1">
+                  <div className="flex-none px-2">
                     <button
-                      onClick={jumpToBottom}
+                      onClick={toggleAutoScroll}
                       className="text-xs text-[#ffffff] hover:text-[#ffffff] transition-colors"
                     >
-                      Scroll to Bottom
+                      {autoScroll ? 'Auto Scroll: ON' : 'Auto Scroll: OFF'}
                     </button>
                   </div>
                 </>

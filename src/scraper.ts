@@ -156,7 +156,7 @@ export class GoogleMapsArchitectureScraper {
     // Use only "architecture firm" to match Google Maps business labeling
     const searchTerms = ["architecture firm"];
     
-    console.log(`🎯 Using single search term for better Google Maps business labeling match:`);
+          console.log(`Using single search term for better Google Maps business labeling match:`);
     searchTerms.forEach((term, index) => {
       console.log(`   ${index + 1}. "${term}"`);
     });

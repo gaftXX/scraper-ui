@@ -153,25 +153,25 @@ export function getSearchTermsForCategories(
           const singleTerm = "architecture firm";
           terms.push(singleTerm);
           
-          console.log(`🎯 Architecture-only: Using only "${singleTerm}" to match Google Maps business labeling`);
+          console.log(`Architecture-only: Using only "${singleTerm}" to match Google Maps business labeling`);
         } else if (categoryId === 'construction') {
           // Only use "construction company" as it matches Google Maps business labeling
           const singleTerm = "construction company";
           terms.push(singleTerm);
           
-          console.log(`🎯 Construction: Using only "${singleTerm}" to match Google Maps business labeling`);
+          console.log(`Construction: Using only "${singleTerm}" to match Google Maps business labeling`);
         } else if (categoryId === 'interior-design') {
           // Only use "interior designer" as it matches Google Maps business labeling
           const singleTerm = "interior designer";
           terms.push(singleTerm);
           
-          console.log(`🎯 Interior Design: Using only "${singleTerm}" to match Google Maps business labeling`);
+          console.log(`Interior Design: Using only "${singleTerm}" to match Google Maps business labeling`);
         } else if (categoryId === 'property-development') {
           // Only use "property developer" as it matches Google Maps business labeling
           const singleTerm = "property developer";
           terms.push(singleTerm);
           
-          console.log(`🎯 Property Development: Using only "${singleTerm}" to match Google Maps business labeling`);
+          console.log(`Property Development: Using only "${singleTerm}" to match Google Maps business labeling`);
         } else {
           // **REGULAR RANDOM SELECTION FOR OTHER CATEGORIES**
           const shuffled = [...category.terms].sort(() => 0.5 - Math.random());

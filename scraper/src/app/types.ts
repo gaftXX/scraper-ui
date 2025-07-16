@@ -164,7 +164,7 @@ export function getIntensityLevel(maxResults: number, searchRadius: number): num
   if (maxResults === 30 && searchRadius === 20) return 2;
   if (maxResults === 40 && searchRadius === 30) return 3;
   if (maxResults === 50 && searchRadius === 40) return 4;
-  if (maxResults === 60 && searchRadius === 50) return 5;
+  if (maxResults === 70 && searchRadius === 50) return 5;
   
   // Default to level 2 if no exact match
   return 2;
