@@ -24,7 +24,7 @@ export class DataOutput {
 
   async saveToJson(results: SearchResult[], filename: string = 'architecture_offices'): Promise<void> {
     if (!this.outputDir) {
-      console.log('⚠️ No output directory configured - skipping local JSON save');
+      console.log('No output directory configured - skipping local JSON save');
       return;
     }
 
@@ -46,12 +46,12 @@ export class DataOutput {
     };
 
     fs.writeFileSync(filePath, JSON.stringify(output, null, 2));
-    console.log(`📄 JSON data saved to: ${filePath}`);
+    console.log(`JSON data saved to: ${filePath}`);
   }
 
   async saveToCsv(results: SearchResult[], filename: string = 'architecture_offices'): Promise<void> {
     if (!this.outputDir) {
-      console.log('⚠️ No output directory configured - skipping local CSV save');
+      console.log('No output directory configured - skipping local CSV save');
       return;
     }
 
@@ -90,17 +90,22 @@ export class DataOutput {
     const csvData = allOffices;
 
     await csvWriter.writeRecords(csvData);
-    console.log(`📊 CSV data saved to: ${filePath}`);
+    console.log(`CSV data saved to: ${filePath}`);
   }
 
   async saveToFirestore(results: SearchResult[]): Promise<void> {
     if (!this.firebaseService) {
-      throw new Error('Firebase service not initialized. Please provide FirebaseService in constructor.');
+      console.log('No Firebase service configured - skipping Firestore save');
+      return;
     }
 
-    console.log('🔥 Saving results to Firestore...');
-    await this.firebaseService.saveSearchResults(results);
-    console.log('✅ Results saved to Firestore successfully');
+    console.log('Saving results to Firestore...');
+    
+    for (const result of results) {
+      await this.firebaseService.saveSearchResult(result);
+    }
+    
+    console.log('Results saved to Firestore successfully');
   }
 
   async saveToFile(results: SearchResult[], format: 'json' | 'csv' | 'firestore', filename: string): Promise<void> {
@@ -141,7 +146,7 @@ export class DataOutput {
 
   async saveSummary(results: SearchResult[], filename: string = 'scraping_summary'): Promise<void> {
     if (!this.outputDir) {
-      console.log('⚠️ No output directory configured - skipping local summary save');
+      console.log('No output directory configured - skipping local summary save');
       return;
     }
 
@@ -149,6 +154,6 @@ export class DataOutput {
     const filePath = path.join(this.outputDir, `${filename}.txt`);
     
     fs.writeFileSync(filePath, summary);
-    console.log(`📋 Summary saved to: ${filePath}`);
+    console.log(`Summary saved to: ${filePath}`);
   }
 } 

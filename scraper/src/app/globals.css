@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  --background: #393837;
+  --foreground: #ffffff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  --font-mono: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #393837;
+    --foreground: #ffffff;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+* {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+h1, h2, h3, h4, h5, h6, p, span, div, button, input, select, textarea, label {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 14px;
+}

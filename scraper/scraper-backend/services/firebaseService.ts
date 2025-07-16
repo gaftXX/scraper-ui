@@ -14,10 +14,14 @@ export class FirebaseService {
 
   constructor(config?: FirebaseConfig) {
     if (config) {
+      // Use provided configuration
       this.initializeWithConfig(config);
-    } else {
-      this.initializeWithDefaultCredentials();
-    }
+      console.log('Firebase initialized with custom config');
+          } else {
+        // Use environment variables
+        this.initializeWithDefaultCredentials();
+        console.log('Firebase initialized with default credentials');
+      }
   }
 
   /**
@@ -62,7 +66,7 @@ export class FirebaseService {
       try {
         // Try to get the default app first
         app = admin.app();
-        console.log('✅ Using existing Firebase app');
+        console.log('Using existing Firebase app');
       } catch (error) {
         // If no default app exists, create a new one
         app = admin.initializeApp({
@@ -73,13 +77,13 @@ export class FirebaseService {
           }),
           databaseURL: config.databaseURL
         });
-        console.log('✅ Firebase initialized with custom config');
+        console.log('Firebase initialized with custom config');
       }
       
       this.db = admin.firestore(app);
       this.initialized = true;
     } catch (error) {
-      console.error('❌ Failed to initialize Firebase with config:', error);
+      console.error('Failed to initialize Firebase with config:', error);
       throw new Error('Firebase initialization failed');
     }
   }
@@ -92,17 +96,17 @@ export class FirebaseService {
       try {
         // Try to get the default app first
         app = admin.app();
-        console.log('✅ Using existing Firebase app with default credentials');
+        console.log('Using existing Firebase app with default credentials');
       } catch (error) {
         // If no default app exists, create a new one
         app = admin.initializeApp();
-        console.log('✅ Firebase initialized with default credentials');
+        console.log('Firebase initialized with default credentials');
       }
       
       this.db = admin.firestore(app);
       this.initialized = true;
     } catch (error) {
-      console.error('❌ Failed to initialize Firebase with default credentials:', error);
+      console.error('Failed to initialize Firebase with default credentials:', error);
       throw new Error('Firebase initialization failed. Please provide service account credentials.');
     }
   }
@@ -210,10 +214,10 @@ export class FirebaseService {
         });
 
         await batch.commit();
-        console.log(`✅ Saved ${offices.length} offices for ${result.city} to latvia/${result.city}/${categoryKey}/ using office names as document IDs`);
+        console.log(`Saved ${offices.length} offices for ${result.city} to latvia/${result.city}/${categoryKey}/ using office names as document IDs`);
       }
     } catch (error) {
-      console.error(`❌ Error saving ${result.city} to Firestore:`, error);
+      console.error(`Error saving ${result.city} to Firestore:`, error);
       throw error;
     }
   }
@@ -222,7 +226,7 @@ export class FirebaseService {
    * Check for duplicate offices based on name and address
    */
   private async findDuplicateOffices(offices: ArchitectureOffice[]): Promise<ArchitectureOffice[]> {
-    console.log(`🔍 Checking ${offices.length} offices for duplicates...`);
+    console.log(`Checking ${offices.length} offices for duplicates...`);
     
     try {
       const existingOffices = await this.getAllOffices();
@@ -250,14 +254,14 @@ export class FirebaseService {
           newOffices.push({ ...office, existedInDatabase: false });
         } else {
           duplicatesFound++;
-          console.log(`⚠️  Duplicate found: ${office.name} - ${office.address}`);
+          console.log(`Duplicate found: ${office.name} - ${office.address}`);
         }
       }
 
-      console.log(`✅ Duplicate check complete: ${newOffices.length} new, ${duplicatesFound} duplicates`);
+      console.log(`Duplicate check complete: ${newOffices.length} new, ${duplicatesFound} duplicates`);
       return newOffices;
     } catch (error) {
-      console.error('❌ Error checking for duplicates:', error);
+      console.error('Error checking for duplicates:', error);
       // If error occurs, return all offices marked as not existing in database
       return offices.map(office => ({ ...office, existedInDatabase: false }));
     }
@@ -267,7 +271,7 @@ export class FirebaseService {
    * Check for duplicate offices within a specific category
    */
   private async findDuplicateOfficesInCategory(offices: ArchitectureOffice[], category: string): Promise<ArchitectureOffice[]> {
-    console.log(`🔍 Checking ${offices.length} offices for duplicates in ${category} category...`);
+    console.log(`Checking ${offices.length} offices for duplicates in ${category} category...`);
     
     try {
       const existingOffices = await this.getAllOfficesInCategory(category);
@@ -295,14 +299,14 @@ export class FirebaseService {
           newOffices.push({ ...office, existedInDatabase: false });
         } else {
           duplicatesFound++;
-          console.log(`⚠️  Duplicate found in ${category}: ${office.name} - ${office.address}`);
+          console.log(`Duplicate found in ${category}: ${office.name} - ${office.address}`);
         }
       }
 
-      console.log(`✅ Duplicate check complete for ${category}: ${newOffices.length} new, ${duplicatesFound} duplicates`);
+      console.log(`Duplicate check complete for ${category}: ${newOffices.length} new, ${duplicatesFound} duplicates`);
       return newOffices;
     } catch (error) {
-      console.error(`❌ Error checking for duplicates in ${category}:`, error);
+      console.error(`Error checking for duplicates in ${category}:`, error);
       // If error occurs, return all offices marked as not existing in database
       return offices.map(office => ({ ...office, existedInDatabase: false }));
     }
@@ -312,7 +316,7 @@ export class FirebaseService {
    * Mark offices as existing or new in database
    */
   async markOfficesExistenceInDatabase(offices: ArchitectureOffice[]): Promise<ArchitectureOffice[]> {
-    console.log(`🔍 Checking ${offices.length} offices against database...`);
+    console.log(`Checking ${offices.length} offices against database...`);
     
     try {
       const existingOffices = await this.getAllOffices();
@@ -337,10 +341,10 @@ export class FirebaseService {
         markedOffices.push({ ...office, existedInDatabase: existsInDatabase });
       }
 
-      console.log(`✅ Database existence check complete: ${markedOffices.filter(o => o.existedInDatabase).length} existing, ${markedOffices.filter(o => !o.existedInDatabase).length} new`);
+      console.log(`Database existence check complete: ${markedOffices.filter(o => o.existedInDatabase).length} existing, ${markedOffices.filter(o => !o.existedInDatabase).length} new`);
       return markedOffices;
     } catch (error) {
-      console.error('❌ Error checking database existence:', error);
+      console.error('Error checking database existence:', error);
       // If error occurs, return all offices marked as not existing in database
       return offices.map(office => ({ ...office, existedInDatabase: false }));
     }
@@ -354,7 +358,7 @@ export class FirebaseService {
       throw new Error('Firebase not initialized');
     }
 
-    console.log(`📤 Saving ${results.length} search results to Firestore...`);
+    console.log(`Saving ${results.length} search results to Firestore...`);
     
     // Group results by category
     const resultsByCategory = new Map<string, SearchResult[]>();
@@ -369,27 +373,27 @@ export class FirebaseService {
       resultsByCategory.get(category)!.push(result);
     }
 
-    console.log(`📊 Results grouped into ${resultsByCategory.size} categories:`);
+    console.log(`Results grouped into ${resultsByCategory.size} categories:`);
     for (const [category, categoryResults] of resultsByCategory) {
       const totalOffices = categoryResults.reduce((sum, result) => sum + result.offices.length, 0);
-      console.log(`   🏷️  ${category}: ${totalOffices} offices across ${categoryResults.length} cities`);
+              console.log(`   ${category}: ${totalOffices} offices across ${categoryResults.length} cities`);
     }
 
     let totalNewOffices = 0;
 
     // Process each category separately
     for (const [category, categoryResults] of resultsByCategory) {
-      console.log(`\n🔄 Processing category: ${category}`);
+      console.log(`\nProcessing category: ${category}`);
       
       // Flatten all offices from category results
       const allOffices = categoryResults.flatMap(result => result.offices);
-      console.log(`📊 Total offices in ${category}: ${allOffices.length}`);
+      console.log(`Total offices in ${category}: ${allOffices.length}`);
 
       // Check for duplicates within this category
       const newOffices = await this.findDuplicateOfficesInCategory(allOffices, category);
       
       if (newOffices.length === 0) {
-        console.log(`ℹ️  No new offices to save in ${category} (all were duplicates)`);
+        console.log(`No new offices to save in ${category} (all were duplicates)`);
         continue;
       }
 
@@ -419,10 +423,10 @@ export class FirebaseService {
       }
       
       totalNewOffices += newOffices.length;
-      console.log(`✅ Saved ${newOffices.length} new offices to ${category} collection`);
+              console.log(`Saved ${newOffices.length} new offices to ${category} collection`);
     }
     
-    console.log(`\n🎉 Successfully saved ${totalNewOffices} new offices across ${resultsByCategory.size} category collections`);
+    console.log(`\nSuccessfully saved ${totalNewOffices} new offices across ${resultsByCategory.size} category collections`);
   }
 
   /**
@@ -474,9 +478,9 @@ export class FirebaseService {
         lastUpdated: admin.firestore.Timestamp.now()
       }, { merge: true });
 
-      console.log(`✅ Saved timing data for intensity level ${timing.intensity} and categories: ${timing.categories.join(', ')}`);
+      console.log(`Saved timing data for intensity level ${timing.intensity} and categories: ${timing.categories.join(', ')}`);
     } catch (error) {
-      console.error('❌ Error saving timing data:', error);
+      console.error('Error saving timing data:', error);
       throw error;
     }
   }
@@ -503,7 +507,7 @@ export class FirebaseService {
 
       return doc.data()?.averageCompletionTime || null;
     } catch (error) {
-      console.error('❌ Error getting average completion time:', error);
+      console.error('Error getting average completion time:', error);
       return null;
     }
   }
@@ -563,7 +567,7 @@ export class FirebaseService {
       
       return offices;
     } catch (error) {
-      console.error('❌ Error fetching offices from Firestore:', error);
+      console.error('Error fetching offices from Firestore:', error);
       throw error;
     }
   }
@@ -612,7 +616,7 @@ export class FirebaseService {
       
       return offices;
     } catch (error) {
-      console.error(`❌ Error fetching offices from ${category} category:`, error);
+      console.error(`Error fetching offices from ${category} category:`, error);
       throw error;
     }
   }
@@ -664,7 +668,7 @@ export class FirebaseService {
       
       return offices;
     } catch (error) {
-      console.error(`❌ Error fetching offices for ${city} from Firestore:`, error);
+      console.error(`Error fetching offices for ${city} from Firestore:`, error);
       throw error;
     }
   }
@@ -712,7 +716,7 @@ export class FirebaseService {
       
       return offices;
     } catch (error) {
-      console.error(`❌ Error fetching offices for ${city} in ${category} from Firestore:`, error);
+      console.error(`Error fetching offices for ${city} in ${category} from Firestore:`, error);
       throw error;
     }
   }
@@ -727,14 +731,14 @@ export class FirebaseService {
       throw new Error('Firebase not initialized');
     }
 
-    console.log('🗑️  Clearing all data from Firestore...');
+    console.log('Clearing all data from Firestore...');
     
     try {
       // Delete all cities and their subcollections from latvia collection
       const latviaSnapshot = await this.db.collection('latvia').get();
       
       for (const cityDoc of latviaSnapshot.docs) {
-        console.log(`🗑️  Clearing ${cityDoc.id} city data...`);
+        console.log(`Clearing ${cityDoc.id} city data...`);
         
         // Get all category subcollections for this city
         const categoryCollections = await cityDoc.ref.listCollections();
@@ -749,17 +753,17 @@ export class FirebaseService {
           });
           
           await batch.commit();
-          console.log(`✅ ${cityDoc.id}/${categoryCollection.id} cleared`);
+                      console.log(`${cityDoc.id}/${categoryCollection.id} cleared`);
         }
         
         // Delete the city document itself
         await cityDoc.ref.delete();
-        console.log(`✅ ${cityDoc.id} city document deleted`);
+                  console.log(`${cityDoc.id} city document deleted`);
       }
       
-      console.log('✅ All data cleared from latvia collection');
+              console.log('All data cleared from latvia collection');
     } catch (error) {
-      console.error('❌ Error clearing data from Firestore:', error);
+      console.error('Error clearing data from Firestore:', error);
       throw error;
     }
   }

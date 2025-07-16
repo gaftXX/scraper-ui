@@ -1,0 +1,672 @@
+'use client';
+
+import React, { useRef } from 'react';
+import { ScraperConfig, SearchCategory, SEARCH_CATEGORIES, CategoryConfig } from '../types';
+import Tooltip from '../components/tooltip/Tooltip';
+
+interface Section2Props {
+  config: ScraperConfig;
+  progress: any;
+  currentSearchTerms: string[];
+  getIntensityLevel: (maxResults: number, searchRadius: number) => number;
+  handleIntensityChange: (intensity: number) => void;
+  handleCategorySelection: (categoryId: SearchCategory, selected: boolean) => void;
+  handleCitySelection: (city: string, selected: boolean) => void;
+  startScraping: () => void;
+  results: any;
+  logs: string[];
+}
+
+const LATVIAN_CITIES = [
+  'Rīga',        // ~632,000
+  'Daugavpils',  // ~82,000
+  'Liepāja',     // ~68,000
+  'Jelgava',     // ~56,000
+  'Jūrmala',     // ~49,000
+  'Ventspils',   // ~34,000
+  'Rēzekne',     // ~27,000
+  'Valmiera',    // ~23,000
+  'Jēkabpils',   // ~22,000
+  'Cēsis'        // ~15,000
+]; // Removed reverse() to show largest cities on the left
+
+export default function Section2({
+  config,
+  progress,
+  currentSearchTerms,
+  getIntensityLevel,
+  handleIntensityChange,
+  handleCategorySelection,
+  handleCitySelection,
+  startScraping,
+  results,
+  logs
+}: Section2Props) {
+  // Create refs for all cities upfront
+  const cityRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  
+  // Create refs for all categories upfront
+  const categoryRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  // Create refs for intensity buttons
+  const intensityRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+
+  // Helper function to get intensity level name
+  const getIntensityName = (maxResults: number, searchRadius: number): string => {
+    const level = getIntensityLevel(maxResults, searchRadius);
+    switch (level) {
+      case 1: return "LIGHT";
+      case 2: return "MEDIUM";
+      case 3: return "NORMAL";
+      case 4: return "HEAVY";
+      case 5: return "INTENSE";
+      default: return "LIGHT";
+    }
+  };
+
+  const getCategoryName = (categoryId: string) => {
+    const categoryMap: any = {
+      'architecture-only': 'Architecture',
+      'construction-architecture': 'Construction + Architecture',
+      'design-services': 'Interior Design',
+      'property-development': 'Property Development',
+      'engineering-services': 'Engineering & Technical Services',
+      'uncategorized': 'Uncategorized'
+    };
+    return categoryMap[categoryId] || categoryId;
+  };
+
+  const getCategoryLetter = (categoryId: string): string => {
+    const letterMap: any = {
+      'architecture-only': 'A',
+      'construction-architecture': 'C',
+      'design-services': 'I',
+      'property-development': 'P',
+      'engineering-services': 'E',
+      'uncategorized': 'U'
+    };
+    return letterMap[categoryId];
+  };
+
+  // Helper function to check if Section1 has no content
+  const hasNoSection1Content = (): boolean => {
+    return progress.status !== 'running' && !results && logs.length === 0;
+  };
+
+  return (
+    <div className="col-span-1 h-full">
+      <div className="h-full flex flex-col p-4 items-center justify-center relative">
+        
+        {/* Vertical line in the middle */}
+        <div 
+          className="absolute"
+          style={{
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)'
+          }}
+        >
+          {/* Top part of the line - NOW THE SLIDER */}
+          <div 
+            className="absolute bg-white"
+            style={{
+              width: '16px',
+              height: '500px',
+              left: '50%',
+              top: '-508px',
+              transform: 'translateX(-50%)',
+              zIndex: 1
+            }}
+          >
+            <div className="absolute w-full h-full">
+              {/* Top section of vertical line (fades) */}
+              <div 
+                className="absolute w-full transition-opacity duration-300"
+                style={{
+                  height: 'calc(50% - 150px)',
+                  top: 0,
+                  opacity: 'var(--line-opacity, 0.1)'
+                }}
+              >
+                <div className="w-full h-full bg-white" />
+              </div>
+              {/* Middle section of vertical line (stays solid) */}
+              <div 
+                className="absolute w-full"
+                style={{
+                  height: '300px',
+                  top: 'calc(50% - 150px)'
+                }}
+              >
+                <div className="w-full h-full bg-white" />
+              </div>
+              {/* Bottom section of vertical line (fades) */}
+              <div 
+                className="absolute w-full transition-opacity duration-300"
+                style={{
+                  height: 'calc(50% - 150px)',
+                  bottom: 0,
+                  opacity: 'var(--line-opacity, 0.1)'
+                }}
+              >
+                <div className="w-full h-full bg-white" />
+              </div>
+            </div>
+          </div>
+          
+          {/* Slider positioned along the top segment */}
+          <div 
+            className="absolute"
+            style={{
+              width: '20px',
+              height: '300px',
+              left: '50%',
+              top: '-378px',
+              transform: 'translateX(-50%)',
+              zIndex: 2,
+              position: 'absolute'
+            }}
+          >
+            {/* Intensity buttons with hover areas */}
+            <div className="flex flex-col justify-between h-full items-center">
+              {[5, 4, 3, 2, 1].map((level) => (
+                <div
+                  key={level}
+                  ref={(el: HTMLDivElement | null) => {
+                    if (intensityRefs.current) intensityRefs.current[level] = el;
+                  }}
+                  className="relative"
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <button
+                    onClick={() => handleIntensityChange(level)}
+                    className={`w-[14px] h-[14px] bg-[#393837] hover:bg-white hover:text-[#393837] transition-colors duration-300 text-[8px] ${
+                      getIntensityLevel(config.maxResults || 20, config.searchRadius || 10) === level
+                        ? 'bg-white text-[#393837]'
+                        : 'text-white'
+                    }`}
+                    style={{
+                      border: 'none',
+                      cursor: progress.status !== 'running' ? 'pointer' : 'default',
+                      outline: 'none'
+                    }}
+                    disabled={progress.status === 'running'}
+                  >
+                    {level}
+                  </button>
+                  {progress.status !== 'running' && (
+                    <Tooltip targetRef={{ current: intensityRefs.current[level] }}>
+                      {(() => {
+                        switch (level) {
+                          case 5: return "INTENSE";
+                          case 4: return "HEAVY";
+                          case 3: return "NORMAL";
+                          case 2: return "MEDIUM";
+                          case 1: return "LIGHT";
+                          default: return "";
+                        }
+                      })()}
+                    </Tooltip>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Left horizontal line with city selection */}
+          {hasNoSection1Content() && (
+            <div 
+              className="absolute"
+              style={{
+                width: '1000px',
+                height: '16px',
+                left: '0',
+                top: '50%',
+                transform: 'translate(calc(-100% - 8px), -50%)'
+              }}
+            >
+              <style jsx global>{`
+                /* City checkbox styles */
+                .city-checkbox {
+                  opacity: 1 !important;
+                  -webkit-appearance: none !important;
+                  -moz-appearance: none !important;
+                  appearance: none !important;
+                  width: 14px !important;
+                  height: 14px !important;
+                  background-color: #393837 !important;
+                  cursor: pointer;
+                  border: none !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  border-radius: 0 !important;
+                  outline: none !important;
+                  box-shadow: none !important;
+                }
+
+                .city-checkbox:checked {
+                  background-color: white !important;
+                }
+
+                .city-letter {
+                  opacity: 1 !important;
+                  color: white !important;
+                }
+
+                .city-checkbox:checked ~ .city-letter {
+                  color: #393837 !important;
+                }
+
+                /* Category checkbox styles */
+                .category-checkbox {
+                  opacity: 1 !important;
+                  -webkit-appearance: none !important;
+                  -moz-appearance: none !important;
+                  appearance: none !important;
+                  width: 14px !important;
+                  height: 14px !important;
+                  background-color: #393837 !important;
+                  cursor: pointer;
+                  border: none !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  border-radius: 0 !important;
+                  outline: none !important;
+                  box-shadow: none !important;
+                }
+
+                .category-checkbox:checked {
+                  background-color: white !important;
+                }
+
+                .category-letter {
+                  opacity: 1 !important;
+                  color: white !important;
+                }
+
+                .category-checkbox:checked ~ .category-letter {
+                  color: #393837 !important;
+                }
+              `}</style>
+
+              {/* White line background with fading sections */}
+              <div className="absolute w-full h-full">
+                {/* Full line (solid) */}
+                <div className="absolute h-full w-full">
+                  <div className="w-full h-full bg-white" />
+                </div>
+              </div>
+              
+              {/* City Selection on the line - starts 50px from middle */}
+              <div 
+                className="absolute"
+                style={{
+                  right: '50px',
+                  top: '50%',
+                  width: '930px',
+                  display: 'flex',
+                  flexDirection: 'row-reverse',
+                  gap: '50px',
+                  flexWrap: 'nowrap',
+                  alignItems: 'center',
+                  justifyContent: 'flex-start',
+                  transform: 'translateY(calc(-50% - 1px))'
+                }}
+              >
+                {LATVIAN_CITIES.map((city: string) => (
+                  <div key={city} className="relative">
+                    <label className="flex flex-col items-center gap-1 px-2 py-1 rounded cursor-pointer bg-opacity-80">
+                      <div 
+                        ref={(el: HTMLDivElement | null) => {
+                          if (cityRefs.current) cityRefs.current[city] = el;
+                        }}
+                        className="relative"
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <div className="relative" style={{ width: '14px', height: '14px' }}>
+                          <input
+                            type="checkbox"
+                            checked={config.cities?.includes(city) || false}
+                            onChange={(e) => handleCitySelection(city, e.target.checked)}
+                            className="city-checkbox absolute inset-0"
+                            disabled={progress.status === 'running'}
+                          />
+                          <span className="city-letter absolute inset-0 flex items-center justify-center text-[8px]">
+                            {city[0]}
+                          </span>
+                        </div>
+                      </div>
+                      {progress.status !== 'running' && (
+                        <Tooltip targetRef={{ current: cityRefs.current[city] }}>
+                          {city}
+                        </Tooltip>
+                      )}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Right horizontal line */}
+          {hasNoSection1Content() && (
+            <div 
+              className="absolute"
+              style={{
+                width: '1000px',
+                height: '16px',
+                left: '8px',
+                top: '50%',
+                transform: 'translate(0, -50%)'
+              }}
+            >
+              {/* White line background with fading sections */}
+              <div className="absolute w-full h-full">
+                {/* Full line (solid) */}
+                <div className="absolute h-full w-full">
+                  <div className="w-full h-full bg-white" />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Bottom part of the line */}
+          <div 
+            className="absolute bg-white"
+            style={{
+              width: '16px',
+              height: '500px',
+              left: '50%',
+              top: '8px',
+              transform: 'translateX(-50%)'
+            }}
+          >
+            <div className="absolute w-full h-full">
+              {/* Top section of vertical line (fades) */}
+              <div 
+                className="absolute w-full transition-opacity duration-300"
+                style={{
+                  height: 'calc(50% - 150px)',
+                  top: 0,
+                  opacity: 'var(--line-opacity, 0.1)'
+                }}
+              >
+                <div className="w-full h-full bg-white" />
+              </div>
+              {/* Middle section of vertical line (stays solid) */}
+              <div 
+                className="absolute w-full"
+                style={{
+                  height: '300px',
+                  top: 'calc(50% - 150px)'
+                }}
+              >
+                <div className="w-full h-full bg-white" />
+              </div>
+              {/* Bottom section of vertical line (fades) */}
+              <div 
+                className="absolute w-full transition-opacity duration-300"
+                style={{
+                  height: 'calc(50% - 150px)',
+                  bottom: 0,
+                  opacity: 'var(--line-opacity, 0.1)'
+                }}
+              >
+                <div className="w-full h-full bg-white" />
+              </div>
+            </div>
+          </div>
+          
+          {/* Transparent box in the middle of the vertical line */}
+          <div 
+            className="absolute"
+            style={{
+              width: '16px',
+              height: '16px',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: 'transparent',
+              zIndex: 2
+            }}
+          />
+          
+          {/* Category checkboxes positioned along the bottom segment */}
+          <div 
+            className="absolute"
+            style={{
+              width: '180px',
+              height: '300px',
+              left: 'calc(50% + 0.2px)',
+              top: '30px',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-start',
+              alignItems: 'center'
+            }}
+          >
+            <style jsx>{`
+              .category-checkbox {
+                opacity: 1;
+              }
+
+              .category-letter {
+                opacity: 1;
+              }
+
+              .category-checkbox:checked {
+                opacity: 1;
+              }
+
+              .category-checkbox:checked + .category-letter {
+                opacity: 1;
+              }
+
+              .category-letter.disabled {
+                opacity: 0;
+              }
+            `}</style>
+
+            <div className="w-full px-2 flex flex-col items-center">
+              {SEARCH_CATEGORIES.map((category: CategoryConfig) => (
+                <div 
+                  key={category.id} 
+                  className="relative w-full flex items-center justify-center" 
+                  style={{ marginTop: '25px', marginBottom: '25px' }}
+                >
+                  <div 
+                    ref={(el: HTMLDivElement | null) => {
+                      if (categoryRefs.current) categoryRefs.current[category.id] = el;
+                    }}
+                    className="relative"
+                    style={{
+                      width: '40px',
+                      height: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        className="category-checkbox"
+                        checked={config.searchCategories?.includes(category.id) || false}
+                        onChange={(e) => handleCategorySelection(category.id, e.target.checked)}
+                        disabled={progress.status === 'running'}
+                      />
+                      <span className="category-letter" data-category={category.id}>
+                        {category.id === 'property-development' ? 'C' : 
+                         category.id === 'interior-design' ? 'I' : 
+                         category.id === 'architecture-only' ? 'A' : ''}
+                      </span>
+                    </div>
+                  </div>
+                  {progress.status !== 'running' && (
+                    <Tooltip targetRef={{ current: categoryRefs.current[category.id] }}>
+                      {getCategoryName(category.id)}
+                    </Tooltip>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <style jsx global>{`
+              /* City checkbox styles */
+              .city-checkbox {
+                opacity: 1 !important;
+                -webkit-appearance: none !important;
+                -moz-appearance: none !important;
+                appearance: none !important;
+                width: 14px !important;
+                height: 14px !important;
+                background-color: #393837 !important;
+                cursor: pointer;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                outline: none !important;
+                box-shadow: none !important;
+                position: relative;
+              }
+
+              .city-checkbox:checked {
+                background-color: white !important;
+              }
+
+              .city-letter {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: white;
+                font-size: 12px;
+                pointer-events: none;
+                opacity: 1 !important;
+              }
+
+              .city-checkbox:checked ~ .city-letter {
+                color: #393837;
+              }
+
+              /* Category checkbox styles - matching city checkbox behavior */
+              .category-checkbox {
+                opacity: 1 !important;
+                -webkit-appearance: none !important;
+                -moz-appearance: none !important;
+                appearance: none !important;
+                width: 14px !important;
+                height: 14px !important;
+                background-color: #393837 !important;
+                cursor: pointer;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                outline: none !important;
+                box-shadow: none !important;
+                position: relative !important;
+                display: block !important;
+              }
+
+              .category-checkbox:checked {
+                background-color: white !important;
+              }
+
+              .category-letter {
+                position: absolute !important;
+                top: 50% !important;
+                left: 50% !important;
+                transform: translate(-50%, -50%) !important;
+                color: white !important;
+                font-size: 12px !important;
+                pointer-events: none !important;
+                opacity: 1 !important;
+                z-index: 2 !important;
+                user-select: none !important;
+                display: block !important;
+                width: auto !important;
+                height: auto !important;
+                line-height: 1 !important;
+              }
+
+              .category-checkbox:checked ~ .category-letter {
+                color: #393837 !important;
+              }
+            `}</style>
+          </div>
+        </div>
+        
+        {/* Start button positioned in the center */}
+        <div 
+          className="absolute"
+          style={{
+            left: '50%',
+            top: 'calc(50% + 2px)', // Added 2px offset
+            transform: 'translate(-50%, -50%)',
+            zIndex: 3
+          }}
+        >
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              console.log('Start Scraping button clicked by user');
+              startScraping();
+            }}
+            disabled={progress.status === 'running' || (config.cities?.length || 0) === 0}
+            className={`transition-colors ${
+              progress.status === 'running' || (config.cities?.length || 0) === 0
+                ? 'opacity-50 cursor-not-allowed'
+                : ''
+            }`}
+            style={{
+              width: '16px',
+              height: '18px',
+              backgroundColor: 'transparent',
+              padding: 0,
+              border: 'none',
+              cursor: 'pointer'
+            }}
+            onMouseEnter={(e) => {
+              if (progress.status !== 'running' && (config.cities?.length || 0) > 0) {
+                e.currentTarget.style.backgroundColor = '#ffffff';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (progress.status !== 'running' && (config.cities?.length || 0) > 0) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }
+            }}
+            type="button"
+            title={progress.status === 'running' 
+              ? 'Scraping in Progress...' 
+              : `Start Scraper at ${getIntensityName(config.maxResults || 20, config.searchRadius || 10)} Intensity (Click to Confirm)`
+            }
+          />
+        </div>
+
+        <div className="space-y-4 flex-1 overflow-y-auto w-full">
+          <div>
+            {/* Removed the horizontal slider - now it's vertical on the line */}
+          </div>
+
+          {/* **CATEGORY SELECTION MOVED TO BOTTOM SEGMENT** */}
+        </div>
+      </div>
+    </div>
+  );
+} 

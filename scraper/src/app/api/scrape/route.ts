@@ -49,15 +49,15 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
         
         // Debug logging for critical events
         if (type === 'complete') {
-          console.log(`🚀 Successfully sent '${type}' event to frontend with ${data.results?.results?.length || 0} result sets`);
+          console.log(`Successfully sent '${type}' event to frontend with ${data.results?.results?.length || 0} result sets`);
         }
       } else {
-        console.log(`⚠️ Attempted to send '${type}' event but controller is closed`);
+        console.log(`Attempted to send '${type}' event but controller is closed`);
       }
     } catch (error) {
       // Controller is already closed, mark it as closed to prevent further attempts
       controllerClosed = true;
-      console.error(`❌ Error sending '${type}' event:`, error);
+      console.error(`Error sending '${type}' event:`, error);
     }
   };
   
@@ -88,7 +88,7 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
     
     // Send to frontend with error styling only if controller is still open
     if (!controllerClosed) {
-      sendEvent('log', { message: `❌ ${message}` });
+      sendEvent('log', { message: `ERROR: ${message}` });
     }
     
     // Also call original console.error for server logs
@@ -119,9 +119,9 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
     // **CATEGORY-BASED SEARCH TERMS LOGGING**
     const selectedCategories = config.searchCategories || ['architecture-only', 'construction'];
     
-    console.log(`🏷️ Selected categories: ${selectedCategories.join(', ')}`);
-    console.log(`🏙️ Selected cities: ${config.cities?.join(', ') || 'None'}`);
-    console.log(`🔍 Search terms that will be used:`);
+    console.log(`Selected categories: ${selectedCategories.join(', ')}`);
+    console.log(`Selected cities: ${config.cities?.join(', ') || 'None'}`);
+    console.log(`Search terms that will be used:`);
     
     // Show search terms for each category
     selectedCategories.forEach(categoryId => {
@@ -129,15 +129,15 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
       if (category) {
         const searchTermCount = (categoryId === 'architecture-only' || categoryId === 'construction' || categoryId === 'interior-design') ? 1 : 4;
         const searchTerms = getSearchTermsForCategories([categoryId], true, searchTermCount);
-        console.log(`\n   📁 ${category.name} (${searchTerms.length} terms):`);
+        console.log(`\n   ${category.name} (${searchTerms.length} terms):`);
         searchTerms.forEach((term, index) => {
           console.log(`      ${index + 1}. "${term}"`);
         });
       }
     });
     
-    console.log(`\n🔥 Data will be saved to separate collections for each category`);
-    console.log(`🚀 Starting scraping process...\n`);
+    console.log(`\nData will be saved to separate collections for each category`);
+    console.log(`Starting scraping process...\n`);
 
     // Send initial progress with category information
     sendEvent('progress', {
@@ -169,7 +169,7 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
         break;
       } catch (initError) {
         initializationAttempts++;
-        console.error(`❌ Initialization attempt ${initializationAttempts}/${maxInitializationAttempts} failed:`, initError);
+        console.error(`Initialization attempt ${initializationAttempts}/${maxInitializationAttempts} failed:`, initError);
         
         if (initializationAttempts >= maxInitializationAttempts) {
           throw new Error(`Failed to initialize scraper after ${maxInitializationAttempts} attempts`);
@@ -187,7 +187,7 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
     // Loop through each category
     for (let catIndex = 0; catIndex < selectedCategories.length; catIndex++) {
       const category = selectedCategories[catIndex];
-      console.log(`🏷️ Processing category: ${category}`);
+      console.log(`Processing category: ${category}`);
       
       // Get dynamic term count for this category
       const termCount = (category === 'architecture-only' || category === 'construction' || category === 'interior-design') ? 1 : 4;
@@ -196,14 +196,14 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
       for (let i = 0; i < cities.length; i++) {
         const city = cities[i];
         
-        console.log(`🔍 Scraping ${city} for ${category}...`);
+        console.log(`Scraping ${city} for ${category}...`);
         
         try {
           const result = await scraper.searchArchitectureOffices(city, i, cities.length, category);
           results.push(result);
           totalOfficesFound += result.offices.length;
           
-          console.log(`✅ Found ${result.offices.length} ${category} offices in ${city}`);
+          console.log(`Found ${result.offices.length} ${category} offices in ${city}`);
           
           
           // Update progress with completion
@@ -232,24 +232,14 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
           }
           
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.error(`❌ Error scraping ${city} for ${category}:`, errorMessage);
-          
-          // Add empty result for failed city/category combination
-          results.push({
-            offices: [],
-            totalFound: 0,
-            searchQuery: '',
-            category: category,
-            city: city,
-            timestamp: new Date().toISOString()
-          });
+          console.error(`Error scraping ${city} for ${category}:`, error);
+          // Continue with next city instead of failing completely
         }
       }
     }
     
-    // Mark offices with database existence status
-    console.log('🔍 Checking offices against database...');
+    // Check if offices already exist in database
+    console.log('Checking offices against database...');
     
     try {
       if (firebaseService) {
@@ -259,7 +249,7 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
             result.offices = await firebaseService.markOfficesExistenceInDatabase(result.offices);
           }
         }
-        console.log('✅ Database existence check completed');
+        console.log('Database existence check completed');
       } else {
         // If no Firebase service, mark all as not existing in database
         for (const result of results) {
@@ -272,7 +262,7 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
         }
       }
     } catch (checkError) {
-      console.error('⚠️ Error checking database existence:', checkError);
+      console.error('Error checking database existence:', checkError);
       // Mark all as not existing if error occurs
       for (const result of results) {
         if (result.offices && result.offices.length > 0) {
@@ -284,9 +274,8 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
       }
     }
     
-    // Prepare final results FIRST (before any potential errors in Firebase saving)
-    console.log('📊 Preparing final results for frontend...');
-    
+    // Prepare final results
+    console.log('Preparing final results for frontend...');
     
     const finalResults = {
       totalOffices: totalOfficesFound,
@@ -295,20 +284,20 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
       summary: dataOutput.generateSummary(results)
     };
     
-    console.log(`📊 Final results prepared: ${totalOfficesFound} offices from ${cities.length} cities`);
+    console.log(`Final results prepared: ${totalOfficesFound} offices from ${cities.length} cities`);
     
     // Send final results to frontend FIRST (critical for UI)
-    console.log('📤 Sending results to frontend...');
+    console.log('Sending results to frontend...');
     sendEvent('complete', { results: finalResults });
-    console.log('✅ Results sent to frontend successfully');
+    console.log('Results sent to frontend successfully');
     
     // Save results to Firebase (secondary - don't let this block frontend results)
-    console.log('💾 Saving results to Firebase...');
+    console.log('Saving results to Firebase...');
     
     try {
       if (firebaseService) {
         await dataOutput.saveToFirestore(results);
-        console.log('🔥 Results successfully saved to Firebase with duplicate checking');
+        console.log('Results successfully saved to Firebase with duplicate checking');
 
         // Save timing data
         const intensity = getIntensityLevel(config.maxResults || 20, config.searchRadius || 20);
@@ -326,16 +315,16 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
         };
 
         await firebaseService.saveScrapeTimingData(timingData);
-        console.log('⏱️ Scraping timing data saved to Firebase');
+        console.log('Scraping timing data saved to Firebase');
       } else {
-        console.log('⚠️ Firebase not configured - results not saved');
+        console.log('Firebase not configured - results not saved');
       }
     } catch (saveError) {
-      console.error('⚠️ Error saving results to Firebase:', saveError);
+      console.error('Error saving results to Firebase:', saveError);
       // Don't let Firebase errors prevent frontend results - they're already sent
     }
     
-    console.log(`🎉 Scraping completed! Found ${totalOfficesFound} offices across ${cities.length} cities and ${selectedCategories.length} categories`);
+    console.log(`Scraping completed! Found ${totalOfficesFound} offices across ${cities.length} cities and ${selectedCategories.length} categories`);
     
     // Close scraper
     if (scraper) {
@@ -345,7 +334,7 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     sendEvent('error', { error: errorMessage });
-    console.error(`❌ Scraping failed:`, error);
+    console.error(`Scraping failed:`, error);
   } finally {
     // Close scraper if it exists
     if (scraper) {

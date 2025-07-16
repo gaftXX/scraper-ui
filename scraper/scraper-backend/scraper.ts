@@ -34,14 +34,7 @@ export class GoogleMapsArchitectureScraper {
   }
 
   async initialize(): Promise<void> {
-    console.log('🚀 Initializing Google Maps scraper...');
-    
-    // Add system diagnostics
-    console.log('📊 System information:');
-    console.log(`   - Platform: ${process.platform}`);
-    console.log(`   - Node version: ${process.version}`);
-    console.log(`   - Architecture: ${process.arch}`);
-    console.log(`   - Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+    console.log('Initializing Google Maps scraper...');
     
     try {
       // Much simpler browser launch for macOS
@@ -65,29 +58,29 @@ export class GoogleMapsArchitectureScraper {
         pipe: false
       };
       
-      console.log('🔧 Launching browser with simplified configuration...');
+      console.log('Launching browser with simplified configuration...');
       this.browser = await puppeteer.launch(launchOptions);
       
       // Test browser connection immediately
       const pages = await this.browser.pages();
-      console.log(`✅ Browser launched successfully with ${pages.length} initial pages`);
+      console.log(`Browser launched successfully with ${pages.length} initial pages`);
       
       // Add connection error handling
       this.browser.on('disconnected', () => {
-        console.log('⚠️  Browser disconnected, will attempt to reconnect if needed');
+        console.log('Browser disconnected, will attempt to reconnect if needed');
         this.browser = null;
       });
       
       // Test creating a page to verify connection
       const testPage = await this.browser.newPage();
       await testPage.close();
-      console.log('✅ Browser connection verified');
+      console.log('Browser connection verified');
       
-      console.log('✅ Browser initialized successfully');
+      console.log('Browser initialized successfully');
       this.browserReconnectAttempts = 0;
       
     } catch (error) {
-      console.error('❌ Failed to initialize browser:', error);
+      console.error('Failed to initialize browser:', error);
       
       // Provide more detailed error information
       if (error instanceof Error) {
@@ -106,9 +99,9 @@ export class GoogleMapsArchitectureScraper {
     if (this.browser) {
       try {
         await this.browser.close();
-        console.log('🔒 Browser closed');
+        console.log('Browser closed');
       } catch (error) {
-        console.log('⚠️  Browser close warning:', error);
+        console.log('Browser close warning:', error);
       }
       this.browser = null;
     }
@@ -120,12 +113,12 @@ export class GoogleMapsArchitectureScraper {
   reset(): void {
     // Reset browser reconnect attempts
     this.browserReconnectAttempts = 0;
-    console.log('🔄 Scraper state reset');
+    console.log('Scraper state reset');
   }
 
   private async ensureBrowserConnection(): Promise<void> {
     if (!this.browser || !this.browser.isConnected()) {
-      console.log('🔄 Browser not connected, attempting to reconnect...');
+      console.log('Browser not connected, attempting to reconnect...');
       
       if (this.browserReconnectAttempts >= this.maxBrowserReconnectAttempts) {
         throw new Error('Maximum browser reconnection attempts exceeded');
@@ -138,7 +131,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           await this.browser.close();
         } catch (error) {
-          console.log('⚠️  Error closing disconnected browser:', error);
+          console.log('Error closing disconnected browser:', error);
         }
       }
       
@@ -166,7 +159,7 @@ export class GoogleMapsArchitectureScraper {
       throw new Error(`City "${city}" not found in Latvia cities list.`);
     }
 
-    console.log(`🔍 Searching for ${category} offices in ${latvianCity.name}...`);
+    console.log(`Searching for ${category} offices in ${latvianCity.name}...`);
 
     const allOffices: ArchitectureOffice[] = [];
     
@@ -176,7 +169,7 @@ export class GoogleMapsArchitectureScraper {
     const searchTermCount = (category === 'architecture-only' || category === 'construction' || category === 'interior-design' || category === 'property-development') ? 1 : 4;
     const searchTerms = getSearchTermsForCategories([category], true, searchTermCount);
     
-    console.log(`🎯 Using ${searchTerms.length} search term(s) for ${category} category:`);
+    console.log(`Using ${searchTerms.length} search term(s) for ${category} category:`);
     searchTerms.forEach((term, index) => {
       console.log(`   ${index + 1}. "${term}"`);
     });
@@ -192,11 +185,11 @@ export class GoogleMapsArchitectureScraper {
         // Add randomized delay between searches
         await this.randomDelay(this.config.delayBetweenRequests!, 1000);
       } catch (error) {
-        console.error(`⚠️  Failed to search for "${searchTerm}" in ${latvianCity.name} after retries:`, error);
+        console.error(`Failed to search for "${searchTerm}" in ${latvianCity.name} after retries:`, error);
         
         // Check if it's a connection error and try to reconnect
         if (this.isConnectionError(error)) {
-          console.log('🔄 Detected connection error, attempting to reconnect...');
+          console.log('Detected connection error, attempting to reconnect...');
           try {
             await this.ensureBrowserConnection();
             // Retry the search term once after reconnection
@@ -204,7 +197,7 @@ export class GoogleMapsArchitectureScraper {
             const categorizedOffices = offices.map(office => ({ ...office, category }));
             allOffices.push(...categorizedOffices);
           } catch (reconnectError) {
-            console.error(`❌ Failed to reconnect and retry "${searchTerm}":`, reconnectError);
+            console.error(`Failed to reconnect and retry "${searchTerm}":`, reconnectError);
           }
         }
       }
@@ -236,20 +229,20 @@ export class GoogleMapsArchitectureScraper {
   private async searchWithTermRetry(city: LatvianCity, searchTerm: string, maxRetries: number = 3, category: SearchCategory = 'architecture-only'): Promise<ArchitectureOffice[]> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`   🔎 Searching: "${searchTerm}" (attempt ${attempt}/${maxRetries})`);
+        console.log(`   Searching: "${searchTerm}" (attempt ${attempt}/${maxRetries})`);
         
         // Ensure browser is connected before each search
         await this.ensureBrowserConnection();
         
         const offices = await this.searchWithTerm(city, searchTerm, category);
-        console.log(`   ✅ Found ${offices.length} offices for "${searchTerm}"`);
+        console.log(`   Found ${offices.length} offices for "${searchTerm}"`);
         return offices;
       } catch (error) {
-        console.error(`   ❌ Attempt ${attempt}/${maxRetries} failed for "${searchTerm}" in ${city.name}:`, error);
+        console.error(`   Attempt ${attempt}/${maxRetries} failed for "${searchTerm}" in ${city.name}:`, error);
         
         // If it's a connection error, try to reconnect
         if (this.isConnectionError(error)) {
-          console.log('   🔄 Connection error detected, will reconnect on next attempt');
+          console.log('Connection error detected, will reconnect on next attempt');
           this.browser = null; // Force reconnection
         }
         
@@ -275,11 +268,11 @@ export class GoogleMapsArchitectureScraper {
       
       // Set up page error handling
       page.on('error', (error) => {
-        console.error('   ⚠️  Page error:', error);
+        console.error('Page error:', error);
       });
       
       page.on('pageerror', (error) => {
-        console.error('   ⚠️  Page JavaScript error:', error);
+        console.error('Page JavaScript error:', error);
       });
       
       // Apply stealth features if enabled
@@ -317,10 +310,10 @@ export class GoogleMapsArchitectureScraper {
       // Wait for results to load with better selector strategy
       try {
         await page.waitForSelector('[role="main"]', { timeout: 15000 });
-        console.log('   ✅ Main content loaded');
+        console.log('Main content loaded');
         await this.delay(2000);
       } catch {
-        console.log('   ⚠️  No main content found, trying alternative selectors');
+        console.log('No main content found, trying alternative selectors');
         
         // Try alternative selectors for Google Maps results
         const alternativeSelectors = [
@@ -337,7 +330,7 @@ export class GoogleMapsArchitectureScraper {
         for (const selector of alternativeSelectors) {
           try {
             await page.waitForSelector(selector, { timeout: 5000 });
-            console.log(`   ✅ Found results with selector: ${selector}`);
+            console.log(`Found results with selector: ${selector}`);
             resultsFound = true;
             break;
           } catch {
@@ -346,7 +339,7 @@ export class GoogleMapsArchitectureScraper {
         }
         
         if (!resultsFound) {
-          console.log('   ⚠️  No results found with any selector');
+          console.log('No results found with any selector');
           return [];
         }
       }
@@ -369,7 +362,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           await page.close();
         } catch (error) {
-          console.log('   ⚠️  Error closing page:', error);
+          console.log('Error closing page:', error);
         }
       }
     }
@@ -469,7 +462,7 @@ export class GoogleMapsArchitectureScraper {
           }, selector);
           
           if (elementCount > 0) {
-            console.log(`   ✅ Found ${elementCount} elements with selector: ${selector}`);
+            console.log(`Found ${elementCount} elements with selector: ${selector}`);
             totalElementCount = elementCount;
             workingSelector = selector;
             break;
@@ -480,12 +473,12 @@ export class GoogleMapsArchitectureScraper {
       }
 
       if (totalElementCount === 0) {
-        console.log('   ⚠️  No office elements found with any selector');
+        console.log('No office elements found with any selector');
         return offices;
       }
       
       const elementsToProcess = Math.min(totalElementCount, this.config.maxResults!);
-      console.log(`   📋 Processing ${elementsToProcess} office elements (found ${totalElementCount} total)`);
+      console.log(`Processing ${elementsToProcess} office elements (found ${totalElementCount} total)`);
       
       const startTime = Date.now();
       let successfulExtractions = 0;
@@ -511,7 +504,7 @@ export class GoogleMapsArchitectureScraper {
               timeEstimate = `~${estimatedTotal.toFixed(0)}s remaining`;
             }
             
-            console.log(`   📊 Progress: ${i}/${elementsToProcess} (${successfulExtractions} successful, ${failedExtractions} failed, ${timeEstimate})`);
+            console.log(`Progress: ${i}/${elementsToProcess} (${successfulExtractions} successful, ${failedExtractions} failed, ${timeEstimate})`);
           }
 
           // Process one element at a time
@@ -532,7 +525,7 @@ export class GoogleMapsArchitectureScraper {
               }, workingSelector, i);
 
               if (!element) {
-                console.log(`   ⚠️  Element ${i + 1} not found, may have been removed`);
+                console.log(`Element ${i + 1} not found, may have been removed`);
                 failedExtractions++;
                 break;
               }
@@ -549,12 +542,12 @@ export class GoogleMapsArchitectureScraper {
               }, workingSelector, i);
 
               if (!clickSuccess) {
-                console.log(`   ⚠️  Failed to click element ${i + 1}, element may be detached`);
+                console.log(`Failed to click element ${i + 1}, element may be detached`);
                 failedExtractions++;
                 break;
               }
 
-              console.log(`   🔍 Clicked element ${i + 1}/${elementsToProcess}`);
+              console.log(`Clicked element ${i + 1}/${elementsToProcess}`);
               
               // Wait for sidebar with timeout and retry logic
               await this.delay(2000); // Wait for sidebar to load
@@ -564,11 +557,11 @@ export class GoogleMapsArchitectureScraper {
               if (!quickInfo) {
                 if (retryCount < maxRetries) {
                   retryCount++;
-                  console.log(`   🔄 Retrying quick info extraction for element ${i + 1} (attempt ${retryCount + 1}/${maxRetries + 1})`);
+                  console.log(`Retrying quick info extraction for element ${i + 1} (attempt ${retryCount + 1}/${maxRetries + 1})`);
                   await this.delay(1000); // Wait before retry
                   continue;
                 } else {
-                  console.log(`   ⚠️  Could not get quick info for element ${i + 1} after ${maxRetries + 1} attempts`);
+                  console.log(`Could not get quick info for element ${i + 1} after ${maxRetries + 1} attempts`);
                   failedExtractions++;
                   break;
                 }
@@ -578,7 +571,7 @@ export class GoogleMapsArchitectureScraper {
               
               // Check if we've seen this office before
               if (seenOffices.has(officeKey)) {
-                console.log(`   ⚠️  Duplicate office found: ${quickInfo.name} - ${quickInfo.address}`);
+                console.log(`Duplicate office found: ${quickInfo.name} - ${quickInfo.address}`);
                 duplicateOffices.add(officeKey);
                 break; // Not a failure, just a duplicate
               }
@@ -588,23 +581,23 @@ export class GoogleMapsArchitectureScraper {
               
               const office = await this.extractOfficeDetails(page, category);
               if (office) {
-                console.log(`   ✅ Extracted: ${office.name} - ${office.address}`);
+                console.log(`Extracted: ${office.name} - ${office.address}`);
                 offices.push(office);
                 successfulExtractions++;
                 break; // Success, exit retry loop
               } else {
-                console.log(`   ⚠️  No office data extracted for element ${i + 1}`);
+                console.log(`No office data extracted for element ${i + 1}`);
                 failedExtractions++;
                 break;
               }
             } catch (error) {
               if (retryCount < maxRetries) {
                 retryCount++;
-                console.log(`   🔄 Retrying element ${i + 1} due to error (attempt ${retryCount + 1}/${maxRetries + 1}): ${error instanceof Error ? error.message : error}`);
+                console.log(`Retrying element ${i + 1} due to error (attempt ${retryCount + 1}/${maxRetries + 1}): ${error instanceof Error ? error.message : error}`);
                 await this.delay(1000); // Wait before retry
                 continue;
               } else {
-                console.error(`   ⚠️  Error extracting office ${i + 1} after ${maxRetries + 1} attempts:`, error instanceof Error ? error.message : error);
+                console.error(`Error extracting office ${i + 1} after ${maxRetries + 1} attempts:`, error instanceof Error ? error.message : error);
                 failedExtractions++;
                 break;
               }
@@ -616,7 +609,7 @@ export class GoogleMapsArchitectureScraper {
           
         } catch (error) {
           failedExtractions++;
-          console.error(`   ⚠️  Error processing element ${i + 1}:`, error instanceof Error ? error.message : error);
+          console.error(`Error processing element ${i + 1}:`, error instanceof Error ? error.message : error);
           
           // Try to recover by waiting and continuing
           await this.delay(1000);
@@ -629,11 +622,11 @@ export class GoogleMapsArchitectureScraper {
       }
       
       const totalTime = (Date.now() - startTime) / 1000;
-      console.log(`   📊 Extraction complete: ${successfulExtractions} successful, ${failedExtractions} failed in ${totalTime.toFixed(1)}s`);
-      console.log(`   📊 Duplicates found: ${duplicateOffices.size}`);
+      console.log(`Extraction complete: ${successfulExtractions} successful, ${failedExtractions} failed in ${totalTime.toFixed(1)}s`);
+      console.log(`Duplicates found: ${duplicateOffices.size}`);
 
     } catch (error) {
-      console.error('   ❌ Error extracting office data:', error);
+      console.error('Error extracting office data:', error);
     }
 
     return offices;
@@ -708,7 +701,7 @@ export class GoogleMapsArchitectureScraper {
 
       // More lenient approach - proceed if we have at least a name
       if (!name) {
-        console.log('   ⚠️  No name found in quick info extraction');
+        console.log('No name found in quick info extraction');
         return null;
       }
 
@@ -732,7 +725,7 @@ export class GoogleMapsArchitectureScraper {
       // Return with name and whatever address we found (even if empty)
       return { name, address: address || 'Address not found' };
     } catch (error) {
-      console.error('   ⚠️  Error getting quick office info:', error);
+      console.error('Error getting quick office info:', error);
       return null;
     }
   }
@@ -762,7 +755,7 @@ export class GoogleMapsArchitectureScraper {
       for (const selector of sidebarSelectors) {
         try {
           await page.waitForSelector(selector, { timeout: 3000 });
-          console.log(`     ✅ Sidebar loaded with selector: ${selector}`);
+          console.log(`Sidebar loaded with selector: ${selector}`);
           sidebarLoaded = true;
           break;
         } catch {
@@ -771,7 +764,7 @@ export class GoogleMapsArchitectureScraper {
       }
       
       if (!sidebarLoaded) {
-        console.log('     ⚠️  No sidebar found, trying to extract from current content');
+        console.log('No sidebar found, trying to extract from current content');
       }
       
       // Wait for content to actually update by monitoring the office name
@@ -786,7 +779,7 @@ export class GoogleMapsArchitectureScraper {
           if (currentName && currentName !== previousOfficeName && currentName !== 'Rezultāti' && currentName !== 'Sponsorēts') {
             finalOfficeName = currentName;
             contentUpdated = true;
-            console.log(`     ✅ Content updated - Office name: ${finalOfficeName}`);
+            console.log(`Content updated - Office name: ${finalOfficeName}`);
             break;
           }
           
@@ -798,7 +791,7 @@ export class GoogleMapsArchitectureScraper {
       }
       
       if (!contentUpdated && !finalOfficeName) {
-        console.log('     ⚠️  Content may not have updated, proceeding with current content');
+        console.log('Content may not have updated, proceeding with current content');
       }
 
       // **BUSINESS LABELING VALIDATION**
@@ -821,11 +814,11 @@ export class GoogleMapsArchitectureScraper {
       }
       
       if (!isValidBusiness) {
-        console.log(`     ⚠️  Business labeling validation failed - not a valid ${category} business`);
+        console.log(`Business labeling validation failed - not a valid ${category} business`);
         return null; // Skip this business if it's not validated
       }
       
-      console.log(`     ✅ Business labeling validation passed - confirmed ${category} business`);
+      console.log(`Business labeling validation passed - confirmed ${category} business`);
 
       // Extract name with multiple selectors - prioritize business name over page headers
       const nameSelectors = [
@@ -843,7 +836,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           name = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           if (name && name !== 'Rezultāti' && name !== 'Sponsorēts' && name.length > 2) {
-            console.log(`     ✅ Found name with selector: ${selector}`);
+            console.log(`Found name with selector: ${selector}`);
             break;
           }
         } catch {
@@ -864,7 +857,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           address = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           if (address) {
-            console.log(`     ✅ Found address with selector: ${selector}`);
+            console.log(`Found address with selector: ${selector}`);
             break;
           }
         } catch {
@@ -885,7 +878,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           phone = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           if (phone) {
-            console.log(`     ✅ Found phone with selector: ${selector}`);
+            console.log(`Found phone with selector: ${selector}`);
             break;
           }
         } catch {
@@ -894,7 +887,7 @@ export class GoogleMapsArchitectureScraper {
       }
       
       // Extract website with highly specific selectors for the office sidebar
-      console.log(`     🔍 Searching for website for: ${name}`);
+      console.log(`Searching for website for: ${name}`);
       
       let website = '';
       let websiteFoundWith = '';
@@ -906,7 +899,7 @@ export class GoogleMapsArchitectureScraper {
         for (const label of businessLabels) {
           if (label.includes('.') && !label.includes(' ') && !label.includes('@') && !label.includes('tel:')) {
             website = label.startsWith('http') ? label : `https://${label}`;
-            console.log(`     ✅ Found website from business label: ${website}`);
+            console.log(`Found website from business label: ${website}`);
             break;
           }
         }
@@ -926,10 +919,10 @@ export class GoogleMapsArchitectureScraper {
         })).filter(link => link.href && !link.href.includes('google.com') && !link.href.includes('maps.google'));
       });
       
-      console.log(`     📋 Available links in sidebar: ${JSON.stringify(availableLinks, null, 2)}`);
+      console.log(`Available links in sidebar: ${JSON.stringify(availableLinks, null, 2)}`);
         }
       } catch (error) {
-        console.log(`     ⚠️  Error extracting website from labels: ${error}`);
+        console.log(`Error extracting website from labels: ${error}`);
       }
       
       // Define website selectors
@@ -1004,8 +997,8 @@ export class GoogleMapsArchitectureScraper {
                 website = cleanWebsite;
                 websiteFoundWith = selector;
                 foundLinkInfo = linkInfo;
-                console.log(`     ✅ Found website "${website}" with selector: ${selector}`);
-                console.log(`     📋 Link details: ${JSON.stringify(linkInfo)}`);
+                console.log(`Found website "${website}" with selector: ${selector}`);
+                console.log(`Link details: ${JSON.stringify(linkInfo)}`);
                 break;
               }
             }
@@ -1013,21 +1006,21 @@ export class GoogleMapsArchitectureScraper {
           
           if (website) break; // Stop if we found a website
         } catch (error) {
-          console.log(`     ⚠️  Error with selector ${selector}: ${error}`);
+          console.log(`Error with selector ${selector}: ${error}`);
         }
       }
       
       // If no website found, log detailed debugging info
       if (!website) {
-        console.log(`     ❌ No website found for office: ${finalOfficeName}`);
-        console.log(`     🔍 Attempted ${websiteSelectors.length} selectors, found ${availableLinks.length} total links`);
+        console.log(`No website found for office: ${finalOfficeName}`);
+        console.log(`Attempted ${websiteSelectors.length} selectors, found ${availableLinks.length} total links`);
         
         // Log the first few links for debugging
         if (availableLinks.length > 0) {
-          console.log(`     📋 First few links: ${availableLinks.slice(0, 3).map(l => l.href).join(', ')}`);
+          console.log(`First few links: ${availableLinks.slice(0, 3).map(l => l.href).join(', ')}`);
         }
       } else {
-        console.log(`     ✅ Successfully extracted website: ${website}`);
+        console.log(`Successfully extracted website: ${website}`);
       }
 
       // Extract rating with multiple selectors
@@ -1042,7 +1035,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           ratingText = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           if (ratingText) {
-            console.log(`     ✅ Found rating with selector: ${selector}`);
+            console.log(`Found rating with selector: ${selector}`);
             break;
           }
         } catch {
@@ -1066,7 +1059,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           hours = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           if (hours) {
-            console.log(`     ✅ Found hours with selector: ${selector}`);
+            console.log(`Found hours with selector: ${selector}`);
             break;
           }
         } catch {
@@ -1086,7 +1079,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           description = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           if (description) {
-            console.log(`     ✅ Found description with selector: ${selector}`);
+            console.log(`Found description with selector: ${selector}`);
             break;
           }
         } catch {
@@ -1099,7 +1092,7 @@ export class GoogleMapsArchitectureScraper {
 
 
       if (!name) {
-        console.log('     ⚠️  No name found, skipping this result');
+        console.log('No name found, skipping this result');
         return null;
       }
 
@@ -1115,11 +1108,11 @@ export class GoogleMapsArchitectureScraper {
         businessLabels: businessLabels // Add business labels to the office data
       };
 
-      console.log(`     📋 Extracted office: ${name} | ${address} | ${phone} | ${website} | Labels: ${businessLabels.join(', ')}`);
+      console.log(`Extracted office: ${name} | ${address} | ${phone} | ${website} | Labels: ${businessLabels.join(', ')}`);
       return office;
 
     } catch (error) {
-      console.error('   ⚠️  Error extracting office details:', error);
+      console.error('Error extracting office details:', error);
       return null;
     }
   }
@@ -1154,7 +1147,7 @@ export class GoogleMapsArchitectureScraper {
             const text = await element.evaluate(el => el?.textContent?.trim() || '');
             if (text && text.length > 2 && !labels.includes(text)) {
               labels.push(text);
-              console.log(`     🏷️  Found business label: "${text}" with selector: ${selector}`);
+              console.log(`Found business label: "${text}" with selector: ${selector}`);
             }
           }
         } catch {
@@ -1169,12 +1162,12 @@ export class GoogleMapsArchitectureScraper {
         const categoryFromUrl = decodeURIComponent(categoryMatch[1]).trim();
         if (categoryFromUrl && !labels.includes(categoryFromUrl)) {
           labels.push(categoryFromUrl);
-          console.log(`     🏷️  Found category from URL: "${categoryFromUrl}"`);
+          console.log(`Found category from URL: "${categoryFromUrl}"`);
         }
       }
       
     } catch (error) {
-      console.error('     ⚠️  Error extracting business labels:', error);
+      console.error('Error extracting business labels:', error);
     }
     
     return labels;
@@ -1201,7 +1194,7 @@ export class GoogleMapsArchitectureScraper {
     ];
     
     if (businessLabels.length === 0) {
-      console.log('     ⚠️  No business labels found - rejecting');
+      console.log('No business labels found - rejecting');
       return false;
     }
     
@@ -1211,14 +1204,14 @@ export class GoogleMapsArchitectureScraper {
       
       for (const acceptedLabel of acceptedConstructionLabels) {
         if (labelLower.includes(acceptedLabel.toLowerCase())) {
-          console.log(`     ✅ Construction firm validation PASSED: "${label}" matches accepted label "${acceptedLabel}"`);
+          console.log(`Construction firm validation PASSED: "${label}" matches accepted label "${acceptedLabel}"`);
           return true;
         }
       }
     }
     
     // If no construction labels found, reject the business
-    console.log(`     ❌ Construction firm validation FAILED: No construction-related labels found in: ${businessLabels.join(', ')}`);
+    console.log(`Construction firm validation FAILED: No construction-related labels found in: ${businessLabels.join(', ')}`);
     return false;
   }
 
@@ -1241,7 +1234,7 @@ export class GoogleMapsArchitectureScraper {
     ];
     
     if (businessLabels.length === 0) {
-      console.log('     ⚠️  No business labels found - rejecting');
+      console.log('No business labels found - rejecting');
       return false;
     }
     
@@ -1251,14 +1244,14 @@ export class GoogleMapsArchitectureScraper {
       
       for (const acceptedLabel of acceptedArchitectureLabels) {
         if (labelLower.includes(acceptedLabel.toLowerCase())) {
-          console.log(`     ✅ Architecture firm validation PASSED: "${label}" matches accepted label "${acceptedLabel}"`);
+          console.log(`Architecture firm validation PASSED: "${label}" matches accepted label "${acceptedLabel}"`);
           return true;
         }
       }
     }
     
     // If no architecture labels found, reject the business
-    console.log(`     ❌ Architecture firm validation FAILED: No architecture-related labels found in: ${businessLabels.join(', ')}`);
+    console.log(`Architecture firm validation FAILED: No architecture-related labels found in: ${businessLabels.join(', ')}`);
     return false;
   }
 
@@ -1281,7 +1274,7 @@ export class GoogleMapsArchitectureScraper {
     ];
     
     if (businessLabels.length === 0) {
-      console.log('     ⚠️  No business labels found - rejecting');
+      console.log('No business labels found - rejecting');
       return false;
     }
     
@@ -1291,14 +1284,14 @@ export class GoogleMapsArchitectureScraper {
       
       for (const acceptedLabel of acceptedInteriorDesignLabels) {
         if (labelLower.includes(acceptedLabel.toLowerCase())) {
-          console.log(`     ✅ Interior design firm validation PASSED: "${label}" matches accepted label "${acceptedLabel}"`);
+          console.log(`Interior design firm validation PASSED: "${label}" matches accepted label "${acceptedLabel}"`);
           return true;
         }
       }
     }
     
     // If no interior design labels found, reject the business
-    console.log(`     ❌ Interior design firm validation FAILED: No interior design-related labels found in: ${businessLabels.join(', ')}`);
+    console.log(`Interior design firm validation FAILED: No interior design-related labels found in: ${businessLabels.join(', ')}`);
     return false;
   }
 
@@ -1327,7 +1320,7 @@ export class GoogleMapsArchitectureScraper {
     ];
     
     if (businessLabels.length === 0) {
-      console.log('     ⚠️  No business labels found - rejecting');
+      console.log('No business labels found - rejecting');
       return false;
     }
     
@@ -1337,20 +1330,20 @@ export class GoogleMapsArchitectureScraper {
       
       for (const acceptedLabel of acceptedPropertyDevelopmentLabels) {
         if (labelLower.includes(acceptedLabel.toLowerCase())) {
-          console.log(`     ✅ Property development firm validation PASSED: "${label}" matches accepted label "${acceptedLabel}"`);
+          console.log(`Property development firm validation PASSED: "${label}" matches accepted label "${acceptedLabel}"`);
           return true;
         }
       }
     }
     
     // If no property development labels found, reject the business
-    console.log(`     ❌ Property development firm validation FAILED: No property development-related labels found in: ${businessLabels.join(', ')}`);
+    console.log(`Property development firm validation FAILED: No property development-related labels found in: ${businessLabels.join(', ')}`);
     return false;
   }
 
   private async scrollToLoadResults(page: Page): Promise<void> {
     try {
-      console.log('   📜 Starting enhanced scrolling for architecture firm results...');
+      console.log('Starting enhanced scrolling for architecture firm results...');
       
       // Multiple selectors for the left results panel with 2024 UI updates
       const resultsPanelSelectors = [
@@ -1372,7 +1365,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           resultsPanel = await page.$(selector);
           if (resultsPanel) {
-            console.log(`   ✅ Found results panel with selector: ${selector}`);
+            console.log(`Found results panel with selector: ${selector}`);
             break;
           }
         } catch {
@@ -1384,14 +1377,14 @@ export class GoogleMapsArchitectureScraper {
       try {
         feedContainer = await page.$('div[role="feed"]');
         if (feedContainer) {
-          console.log(`   ✅ Found feed container for enhanced scrolling`);
+          console.log(`Found feed container for enhanced scrolling`);
         }
       } catch {
         // Feed container not found, use results panel
       }
       
       if (!resultsPanel && !feedContainer) {
-        console.log('   ⚠️  Could not find results panel or feed container, using page scroll');
+        console.log('Could not find results panel or feed container, using page scroll');
         await this.fallbackScrolling(page);
         return;
       }
@@ -1431,7 +1424,7 @@ export class GoogleMapsArchitectureScraper {
           return maxCount;
         }, resultSelectors);
         
-        console.log(`   📜 Scroll ${scrollAttempts + 1}: Found ${currentResultCount} results`);
+        console.log(`Scroll ${scrollAttempts + 1}: Found ${currentResultCount} results`);
         
         // Enhanced scrolling with multiple techniques for 2024 Google Maps
         await page.evaluate((panelSelector, feedSelector) => {
@@ -1494,7 +1487,7 @@ export class GoogleMapsArchitectureScraper {
         const variableDelay = Math.random() * 2000;
         const totalDelay = baseDelay + variableDelay;
         
-        console.log(`   ⏳ Waiting ${Math.round(totalDelay)}ms for new results to load...`);
+        console.log(`Waiting ${Math.round(totalDelay)}ms for new results to load...`);
         await this.delay(totalDelay);
         
         // Check if new results were loaded with enhanced counting
@@ -1514,14 +1507,14 @@ export class GoogleMapsArchitectureScraper {
         const newResultsLoaded = newResultCount - currentResultCount;
         
         if (newResultsLoaded > 0) {
-          console.log(`   ✅ Loaded ${newResultsLoaded} new results (Total: ${newResultCount})`);
+          console.log(`Loaded ${newResultsLoaded} new results (Total: ${newResultCount})`);
           noNewResultsCount = 0; // Reset counter
           consecutiveFailures = 0;
           totalLoadedResults += newResultsLoaded;
         } else {
           noNewResultsCount++;
           consecutiveFailures++;
-          console.log(`   ⚠️  No new results loaded (${noNewResultsCount}/${maxNoNewResults}, consecutive failures: ${consecutiveFailures})`);
+          console.log(`No new results loaded (${noNewResultsCount}/${maxNoNewResults}, consecutive failures: ${consecutiveFailures})`);
         }
         
         // Enhanced "Show more" button detection with 2024 UI selectors
@@ -1544,7 +1537,7 @@ export class GoogleMapsArchitectureScraper {
           try {
             const showMoreButton = await page.$(selector);
             if (showMoreButton) {
-              console.log(`   🔄 Found "Show more" button with selector: ${selector}, clicking...`);
+              console.log(`Found "Show more" button with selector: ${selector}, clicking...`);
               await showMoreButton.click();
               await this.delay(3000); // Wait for button click to load results
               showMoreClicked = true;
@@ -1556,7 +1549,7 @@ export class GoogleMapsArchitectureScraper {
         }
         
         if (showMoreClicked) {
-          console.log(`   ✅ Successfully clicked "Show more" button`);
+          console.log(`Successfully clicked "Show more" button`);
           noNewResultsCount = 0; // Reset counter after button click
         }
         
@@ -1588,7 +1581,7 @@ export class GoogleMapsArchitectureScraper {
         
         // Early exit if we've been consistently failing and have reasonable results
         if (consecutiveFailures >= 5 && totalLoadedResults >= 20) {
-          console.log(`   ⚠️  Multiple consecutive failures with ${totalLoadedResults} results loaded, may have reached end`);
+          console.log(`Multiple consecutive failures with ${totalLoadedResults} results loaded, may have reached end`);
           break;
         }
         
@@ -1611,22 +1604,22 @@ export class GoogleMapsArchitectureScraper {
         return maxCount;
       }, resultSelectors);
       
-      console.log(`   📜 Enhanced scrolling complete! Final result count: ${finalCount} (${scrollAttempts} scrolls, ${totalLoadedResults} new results loaded)`);
+      console.log(`Enhanced scrolling complete! Final result count: ${finalCount} (${scrollAttempts} scrolls, ${totalLoadedResults} new results loaded)`);
       
       // Final check: if we still have very few results, try alternative approaches
       if (finalCount < 20 && scrollAttempts < maxScrollAttempts) {
-        console.log(`   🔄 Low result count (${finalCount}), trying alternative scrolling approaches...`);
+        console.log(`Low result count (${finalCount}), trying alternative scrolling approaches...`);
         await this.alternativeScrollingApproaches(page);
       }
       
     } catch (error) {
-      console.error('   ⚠️  Error during enhanced scrolling:', error);
+      console.error('Error during enhanced scrolling:', error);
       await this.fallbackScrolling(page);
     }
   }
   
   private async alternativeScrollingApproaches(page: Page): Promise<void> {
-    console.log('   🔄 Trying alternative scrolling approaches...');
+    console.log('Trying alternative scrolling approaches...');
     
     try {
       // Alternative approach 1: Try different feed selectors
@@ -1643,7 +1636,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           const feed = await page.$(selector);
           if (feed) {
-            console.log(`   📜 Found alternative feed with selector: ${selector}`);
+            console.log(`Found alternative feed with selector: ${selector}`);
             await page.evaluate((sel) => {
               const element = document.querySelector(sel);
               if (element) {
@@ -1690,15 +1683,15 @@ export class GoogleMapsArchitectureScraper {
         await this.delay(500);
       }
       
-      console.log('   ✅ Alternative scrolling approaches completed');
+      console.log('Alternative scrolling approaches completed');
       
     } catch (error) {
-      console.error('   ⚠️  Error in alternative scrolling approaches:', error);
+      console.error('Error in alternative scrolling approaches:', error);
     }
   }
 
   private async fallbackScrolling(page: Page): Promise<void> {
-    console.log('   📜 Using fallback scrolling method...');
+    console.log('Using fallback scrolling method...');
     
     for (let i = 0; i < 10; i++) {
       await page.evaluate(() => {
@@ -1719,7 +1712,7 @@ export class GoogleMapsArchitectureScraper {
       await this.delay(1500);
     }
     
-    console.log('   📜 Fallback scrolling complete');
+    console.log('Fallback scrolling complete');
   }
 
   private removeDuplicates(offices: ArchitectureOffice[]): ArchitectureOffice[] {
@@ -1775,7 +1768,7 @@ export class GoogleMapsArchitectureScraper {
 
     } catch (error) {
       // Silently continue if simulation fails
-      console.log('   ⚠️  Human behavior simulation failed, continuing...');
+      console.log('Human behavior simulation failed, continuing...');
     }
   }
 
@@ -1789,7 +1782,7 @@ export class GoogleMapsArchitectureScraper {
       const isConsentPage = currentUrl.includes('consent.google.com');
       
       if (isConsentPage) {
-        console.log('   🛡️  Detected Google consent page, handling...');
+        console.log('Detected Google consent page, handling...');
         
         // Try multiple consent button selectors
         const consentButtons = [
@@ -1833,7 +1826,7 @@ export class GoogleMapsArchitectureScraper {
                   }
                 }, buttonText);
                 
-                console.log(`   ✅ Clicked consent button with text: ${buttonText}`);
+                console.log(`Clicked consent button with text: ${buttonText}`);
                 consentHandled = true;
                 break;
               }
@@ -1841,7 +1834,7 @@ export class GoogleMapsArchitectureScraper {
               const element = await page.$(selector);
               if (element) {
                 await element.click();
-                console.log(`   ✅ Clicked consent button: ${selector}`);
+                console.log(`Clicked consent button: ${selector}`);
                 consentHandled = true;
                 break;
               }
@@ -1853,23 +1846,23 @@ export class GoogleMapsArchitectureScraper {
         
         if (consentHandled) {
           // Wait for redirect to complete
-          console.log('   ⏳ Waiting for redirect to Google Maps...');
+          console.log('Waiting for redirect to Google Maps...');
           await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 });
           
           // Verify we're back on Google Maps
           const finalUrl = page.url();
           if (finalUrl.includes('maps.google.com')) {
-            console.log('   ✅ Successfully redirected to Google Maps');
+            console.log('Successfully redirected to Google Maps');
           } else {
-            console.log('   ⚠️  Unexpected redirect URL:', finalUrl);
+            console.log('Unexpected redirect URL:', finalUrl);
           }
         } else {
-          console.log('   ⚠️  Could not find consent button, continuing anyway...');
+          console.log('Could not find consent button, continuing anyway...');
         }
       }
       
     } catch (error) {
-      console.log('   ⚠️  Error handling Google consent:', error);
+      console.log('Error handling Google consent:', error);
       // Continue anyway
     }
   }
@@ -1893,12 +1886,12 @@ export class GoogleMapsArchitectureScraper {
         try {
           const element = await page.$(selector);
           if (element) {
-            console.log(`   🤖 Found potential blocking element: ${selector}`);
+            console.log(`Found potential blocking element: ${selector}`);
             
             // Try to click accept/continue buttons
             if (selector.includes('Accept') || selector.includes('Continue') || selector.includes('accept')) {
               await element.click();
-              console.log(`   ✅ Clicked blocking element`);
+              console.log(`Clicked blocking element`);
               await this.delay(2000);
             }
           }
@@ -1912,7 +1905,7 @@ export class GoogleMapsArchitectureScraper {
         const locationButton = await page.$('button[data-value="location_consent"]');
         if (locationButton) {
           await locationButton.click();
-          console.log('   ✅ Handled location consent');
+          console.log('Handled location consent');
           await this.delay(2000);
         }
       } catch {
@@ -1924,7 +1917,7 @@ export class GoogleMapsArchitectureScraper {
 
     } catch (error) {
       // Silently continue if blocking detection fails
-      console.log('   ⚠️  Blocking detection failed, continuing...');
+      console.log('Blocking detection failed, continuing...');
     }
   }
 
@@ -1939,7 +1932,7 @@ export class GoogleMapsArchitectureScraper {
         const result = await this.searchArchitectureOffices(cityName);
         results.push(result);
         
-        console.log(`✅ Completed scraping ${cityName}: ${result.offices.length} offices found`);
+        console.log(`Completed scraping ${cityName}: ${result.offices.length} offices found`);
         
         // Add delay between cities
         await this.delay(this.config.delayBetweenRequests!);
@@ -1950,11 +1943,11 @@ export class GoogleMapsArchitectureScraper {
         }
         
       } catch (error) {
-        console.error(`❌ Error scraping ${cityName}:`, error);
+        console.error(`Error scraping ${cityName}:`, error);
         
         // If it's a connection error, try to recover and continue
         if (this.isConnectionError(error)) {
-          console.log(`🔄 Attempting to recover from connection error for ${cityName}...`);
+          console.log(`Attempting to recover from connection error for ${cityName}...`);
           try {
             // Force browser reconnection
             this.browser = null;
@@ -1963,9 +1956,9 @@ export class GoogleMapsArchitectureScraper {
             // Retry the city once
             const result = await this.searchArchitectureOffices(cityName);
             results.push(result);
-            console.log(`✅ Recovered and completed scraping ${cityName}: ${result.offices.length} offices found`);
+            console.log(`Recovered and completed scraping ${cityName}: ${result.offices.length} offices found`);
           } catch (retryError) {
-            console.error(`❌ Failed to recover scraping for ${cityName}:`, retryError);
+            console.error(`Failed to recover scraping for ${cityName}:`, retryError);
           }
         }
       }
