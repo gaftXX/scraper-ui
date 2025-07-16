@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ScraperConfig, SearchCategory, SEARCH_CATEGORIES, CategoryConfig } from '../types';
 import Tooltip from '../components/tooltip/Tooltip';
 
@@ -51,6 +51,24 @@ export default function Section2({
   // Create refs for intensity buttons
   const intensityRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
 
+  // Add state for scraper focus mode
+  const [isScraperFocus, setIsScraperFocus] = useState(false);
+
+  // Add keyboard event listener
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Only allow Shift+S toggle when scraper is not running
+      if (event.key.toLowerCase() === 's' && event.shiftKey && progress.status !== 'running') {
+        setIsScraperFocus(prev => !prev); // Toggle the state
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [progress.status]); // Add progress.status as dependency
+
   // Helper function to get intensity level name
   const getIntensityName = (maxResults: number, searchRadius: number): string => {
     const level = getIntensityLevel(maxResults, searchRadius);
@@ -66,12 +84,10 @@ export default function Section2({
 
   const getCategoryName = (categoryId: string) => {
     const categoryMap: any = {
-      'architecture-only': 'Architecture',
-      'construction-architecture': 'Construction + Architecture',
-      'design-services': 'Interior Design',
-      'property-development': 'Property Development',
-      'engineering-services': 'Engineering & Technical Services',
-      'uncategorized': 'Uncategorized'
+      'architecture-only': 'Pure Architecture',
+      'construction': 'Construction',
+      'interior-design': 'Interior Design',
+      'property-development': 'Property Development'
     };
     return categoryMap[categoryId] || categoryId;
   };
@@ -79,18 +95,11 @@ export default function Section2({
   const getCategoryLetter = (categoryId: string): string => {
     const letterMap: any = {
       'architecture-only': 'A',
-      'construction-architecture': 'C',
-      'design-services': 'I',
-      'property-development': 'P',
-      'engineering-services': 'E',
-      'uncategorized': 'U'
+      'construction': 'C',
+      'interior-design': 'I',
+      'property-development': 'P'
     };
     return letterMap[categoryId];
-  };
-
-  // Helper function to check if Section1 has no content
-  const hasNoSection1Content = (): boolean => {
-    return progress.status !== 'running' && !results && logs.length === 0;
   };
 
   return (
@@ -106,9 +115,9 @@ export default function Section2({
             transform: 'translate(-50%, -50%)'
           }}
         >
-          {/* Top part of the line - NOW THE SLIDER */}
+          {/* Top part of the line */}
           <div 
-            className="absolute bg-white"
+            className="absolute"
             style={{
               width: '16px',
               height: '500px',
@@ -119,44 +128,30 @@ export default function Section2({
             }}
           >
             <div className="absolute w-full h-full">
-              {/* Top section of vertical line (fades) */}
+              {/* Solid section (250px from center) */}
               <div 
-                className="absolute w-full transition-opacity duration-300"
+                className="absolute w-full bg-white"
                 style={{
-                  height: 'calc(50% - 150px)',
-                  top: 0,
-                  opacity: 'var(--line-opacity, 0.1)'
-                }}
-              >
-                <div className="w-full h-full bg-white" />
-              </div>
-              {/* Middle section of vertical line (stays solid) */}
-              <div 
-                className="absolute w-full"
-                style={{
-                  height: '300px',
-                  top: 'calc(50% - 150px)'
-                }}
-              >
-                <div className="w-full h-full bg-white" />
-              </div>
-              {/* Bottom section of vertical line (fades) */}
-              <div 
-                className="absolute w-full transition-opacity duration-300"
-                style={{
-                  height: 'calc(50% - 150px)',
+                  height: '250px',
                   bottom: 0,
-                  opacity: 'var(--line-opacity, 0.1)'
+                  opacity: 1
                 }}
-              >
-                <div className="w-full h-full bg-white" />
-              </div>
+              />
+              {/* Faded section */}
+              <div 
+                className="absolute w-full bg-white transition-opacity duration-300"
+                style={{
+                  height: 'calc(100% - 250px)',
+                  top: 0,
+                  opacity: isScraperFocus ? 1 : 0.1
+                }}
+              />
             </div>
           </div>
           
           {/* Slider positioned along the top segment */}
           <div 
-            className="absolute"
+            className={`absolute transition-opacity duration-300 ${isScraperFocus ? 'opacity-100' : 'opacity-0'}`}
             style={{
               width: '20px',
               height: '300px',
@@ -181,7 +176,8 @@ export default function Section2({
                     height: '40px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    pointerEvents: isScraperFocus ? 'auto' : 'none'
                   }}
                 >
                   <button
@@ -193,14 +189,14 @@ export default function Section2({
                     }`}
                     style={{
                       border: 'none',
-                      cursor: progress.status !== 'running' ? 'pointer' : 'default',
+                      cursor: isScraperFocus && progress.status !== 'running' ? 'pointer' : 'default',
                       outline: 'none'
                     }}
-                    disabled={progress.status === 'running'}
+                    disabled={!isScraperFocus || progress.status === 'running'}
                   >
                     {level}
                   </button>
-                  {progress.status !== 'running' && (
+                  {isScraperFocus && progress.status !== 'running' && (
                     <Tooltip targetRef={{ current: intensityRefs.current[level] }}>
                       {(() => {
                         switch (level) {
@@ -219,19 +215,19 @@ export default function Section2({
             </div>
           </div>
 
-          {/* Left horizontal line with city selection */}
-          {hasNoSection1Content() && (
-            <div 
-              className="absolute"
-              style={{
-                width: '1000px',
-                height: '16px',
-                left: '0',
-                top: '50%',
-                transform: 'translate(calc(-100% - 8px), -50%)'
-              }}
-            >
-              <style jsx global>{`
+          {/* Left horizontal line */}
+          <div 
+            className="absolute"
+            style={{
+              width: '1000px',
+              height: '16px',
+              left: '0',
+              top: '50%',
+              transform: 'translate(calc(-100% - 8px), -50%)',
+              opacity: progress.status === 'running' ? 0 : 1
+            }}
+          >
+            <style jsx global>{`
                 /* City checkbox styles */
                 .city-checkbox {
                   opacity: 1 !important;
@@ -295,96 +291,124 @@ export default function Section2({
                 }
               `}</style>
 
-              {/* White line background with fading sections */}
-              <div className="absolute w-full h-full">
-                {/* Full line (solid) */}
-                <div className="absolute h-full w-full">
-                  <div className="w-full h-full bg-white" />
-                </div>
-              </div>
-              
-              {/* City Selection on the line - starts 50px from middle */}
+            <div className="absolute w-full h-full">
+              {/* Solid section (250px from center) */}
               <div 
-                className="absolute"
+                className="absolute h-full bg-white"
                 style={{
-                  right: '50px',
-                  top: '50%',
-                  width: '930px',
-                  display: 'flex',
-                  flexDirection: 'row-reverse',
-                  gap: '50px',
-                  flexWrap: 'nowrap',
-                  alignItems: 'center',
-                  justifyContent: 'flex-start',
-                  transform: 'translateY(calc(-50% - 1px))'
+                  width: '250px',
+                  right: 0,
+                  opacity: 1
                 }}
-              >
-                {LATVIAN_CITIES.map((city: string) => (
-                  <div key={city} className="relative">
-                    <label className="flex flex-col items-center gap-1 px-2 py-1 rounded cursor-pointer bg-opacity-80">
-                      <div 
-                        ref={(el: HTMLDivElement | null) => {
-                          if (cityRefs.current) cityRefs.current[city] = el;
-                        }}
-                        className="relative"
-                        style={{
-                          width: '20px',
-                          height: '20px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <div className="relative" style={{ width: '14px', height: '14px' }}>
-                          <input
-                            type="checkbox"
-                            checked={config.cities?.includes(city) || false}
-                            onChange={(e) => handleCitySelection(city, e.target.checked)}
-                            className="city-checkbox absolute inset-0"
-                            disabled={progress.status === 'running'}
-                          />
-                          <span className="city-letter absolute inset-0 flex items-center justify-center text-[8px]">
-                            {city[0]}
-                          </span>
-                        </div>
-                      </div>
-                      {progress.status !== 'running' && (
-                        <Tooltip targetRef={{ current: cityRefs.current[city] }}>
-                          {city}
-                        </Tooltip>
-                      )}
-                    </label>
-                  </div>
-                ))}
-              </div>
+              />
+              {/* Faded section */}
+              <div 
+                className="absolute h-full bg-white transition-opacity duration-300"
+                style={{
+                  width: 'calc(100% - 250px)',
+                  left: 0,
+                  opacity: isScraperFocus ? 1 : 0.1
+                }}
+              />
             </div>
-          )}
-          
-          {/* Right horizontal line */}
-          {hasNoSection1Content() && (
+            
+            {/* City Selection buttons */}
             <div 
-              className="absolute"
+              className={`absolute transition-opacity duration-300 ${isScraperFocus ? 'opacity-100' : 'opacity-0'}`}
               style={{
-                width: '1000px',
-                height: '16px',
-                left: '8px',
+                right: '50px',
                 top: '50%',
-                transform: 'translate(0, -50%)'
+                width: '930px',
+                display: 'flex',
+                flexDirection: 'row-reverse',
+                gap: '50px',
+                flexWrap: 'nowrap',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                transform: 'translateY(calc(-50% - 1px))',
+                pointerEvents: isScraperFocus ? 'auto' : 'none'
               }}
             >
-              {/* White line background with fading sections */}
-              <div className="absolute w-full h-full">
-                {/* Full line (solid) */}
-                <div className="absolute h-full w-full">
-                  <div className="w-full h-full bg-white" />
+              {LATVIAN_CITIES.map((city: string) => (
+                <div key={city} className="relative">
+                  <label className="flex flex-col items-center gap-1 px-2 py-1 rounded bg-opacity-80" style={{ cursor: 'default' }}>
+                    <div 
+                      ref={(el: HTMLDivElement | null) => {
+                        if (cityRefs.current) cityRefs.current[city] = el;
+                      }}
+                      className="relative"
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <div className="relative" style={{ width: '14px', height: '14px' }}>
+                        <input
+                          type="checkbox"
+                          checked={config.cities?.includes(city) || false}
+                          onChange={(e) => handleCitySelection(city, e.target.checked)}
+                          className="city-checkbox absolute inset-0"
+                          style={{
+                            cursor: isScraperFocus && progress.status !== 'running' ? 'pointer' : 'default'
+                          }}
+                          disabled={!isScraperFocus || progress.status === 'running'}
+                        />
+                        <span className="city-letter absolute inset-0 flex items-center justify-center text-[8px]">
+                          {city[0]}
+                        </span>
+                      </div>
+                    </div>
+                  </label>
+                  {isScraperFocus && progress.status !== 'running' && (
+                    <Tooltip targetRef={{ current: cityRefs.current[city] }}>
+                      {city}
+                    </Tooltip>
+                  )}
                 </div>
-              </div>
+              ))}
             </div>
-          )}
+          </div>
+          
+          {/* Right horizontal line */}
+          <div 
+            className="absolute"
+            style={{
+              width: '1000px',
+              height: '16px',
+              left: '8px',
+              top: '50%',
+              transform: 'translate(0, -50%)',
+              opacity: progress.status === 'running' ? 0 : 1
+            }}
+          >
+            <div className="absolute w-full h-full">
+              {/* Solid section (250px from center) */}
+              <div 
+                className="absolute h-full bg-white"
+                style={{
+                  width: '250px',
+                  left: 0,
+                  opacity: 1
+                }}
+              />
+              {/* Faded section */}
+              <div 
+                className="absolute h-full bg-white transition-opacity duration-300"
+                style={{
+                  width: 'calc(100% - 250px)',
+                  right: 0,
+                  opacity: isScraperFocus ? 1 : 0.1
+                }}
+              />
+            </div>
+          </div>
           
           {/* Bottom part of the line */}
           <div 
-            className="absolute bg-white"
+            className="absolute"
             style={{
               width: '16px',
               height: '500px',
@@ -394,38 +418,24 @@ export default function Section2({
             }}
           >
             <div className="absolute w-full h-full">
-              {/* Top section of vertical line (fades) */}
+              {/* Solid section (250px from center) */}
               <div 
-                className="absolute w-full transition-opacity duration-300"
+                className="absolute w-full bg-white"
                 style={{
-                  height: 'calc(50% - 150px)',
+                  height: '250px',
                   top: 0,
-                  opacity: 'var(--line-opacity, 0.1)'
+                  opacity: 1
                 }}
-              >
-                <div className="w-full h-full bg-white" />
-              </div>
-              {/* Middle section of vertical line (stays solid) */}
+              />
+              {/* Faded section */}
               <div 
-                className="absolute w-full"
+                className="absolute w-full bg-white transition-opacity duration-300"
                 style={{
-                  height: '300px',
-                  top: 'calc(50% - 150px)'
-                }}
-              >
-                <div className="w-full h-full bg-white" />
-              </div>
-              {/* Bottom section of vertical line (fades) */}
-              <div 
-                className="absolute w-full transition-opacity duration-300"
-                style={{
-                  height: 'calc(50% - 150px)',
+                  height: 'calc(100% - 250px)',
                   bottom: 0,
-                  opacity: 'var(--line-opacity, 0.1)'
+                  opacity: isScraperFocus ? 1 : 0.1
                 }}
-              >
-                <div className="w-full h-full bg-white" />
-              </div>
+              />
             </div>
           </div>
           
@@ -445,7 +455,7 @@ export default function Section2({
           
           {/* Category checkboxes positioned along the bottom segment */}
           <div 
-            className="absolute"
+            className={`absolute transition-opacity duration-300 ${isScraperFocus ? 'opacity-100' : 'opacity-0'}`}
             style={{
               width: '180px',
               height: '300px',
@@ -455,7 +465,8 @@ export default function Section2({
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'flex-start',
-              alignItems: 'center'
+              alignItems: 'center',
+              pointerEvents: isScraperFocus ? 'auto' : 'none'
             }}
           >
             <style jsx>{`
@@ -506,16 +517,17 @@ export default function Section2({
                         className="category-checkbox"
                         checked={config.searchCategories?.includes(category.id) || false}
                         onChange={(e) => handleCategorySelection(category.id, e.target.checked)}
-                        disabled={progress.status === 'running'}
+                        style={{
+                          cursor: isScraperFocus && progress.status !== 'running' ? 'pointer' : 'default'
+                        }}
+                        disabled={!isScraperFocus || progress.status === 'running'}
                       />
                       <span className="category-letter" data-category={category.id}>
-                        {category.id === 'property-development' ? 'C' : 
-                         category.id === 'interior-design' ? 'I' : 
-                         category.id === 'architecture-only' ? 'A' : ''}
+                        {getCategoryLetter(category.id)}
                       </span>
                     </div>
                   </div>
-                  {progress.status !== 'running' && (
+                  {isScraperFocus && progress.status !== 'running' && (
                     <Tooltip targetRef={{ current: categoryRefs.current[category.id] }}>
                       {getCategoryName(category.id)}
                     </Tooltip>
@@ -524,6 +536,7 @@ export default function Section2({
               ))}
             </div>
 
+            {/* Update the global styles for checkboxes */}
             <style jsx global>{`
               /* City checkbox styles */
               .city-checkbox {
@@ -534,7 +547,6 @@ export default function Section2({
                 width: 14px !important;
                 height: 14px !important;
                 background-color: #393837 !important;
-                cursor: pointer;
                 border: none !important;
                 padding: 0 !important;
                 margin: 0 !important;
@@ -563,7 +575,7 @@ export default function Section2({
                 color: #393837;
               }
 
-              /* Category checkbox styles - matching city checkbox behavior */
+              /* Category checkbox styles */
               .category-checkbox {
                 opacity: 1 !important;
                 -webkit-appearance: none !important;
@@ -572,7 +584,6 @@ export default function Section2({
                 width: 14px !important;
                 height: 14px !important;
                 background-color: #393837 !important;
-                cursor: pointer;
                 border: none !important;
                 padding: 0 !important;
                 margin: 0 !important;
@@ -610,26 +621,28 @@ export default function Section2({
             `}</style>
           </div>
         </div>
-        
+
         {/* Start button positioned in the center */}
         <div 
-          className="absolute"
+          className={`absolute transition-opacity duration-300 ${isScraperFocus ? 'opacity-100' : 'opacity-0'}`}
           style={{
             left: '50%',
-            top: 'calc(50% + 2px)', // Added 2px offset
+            top: 'calc(50% + 2px)',
             transform: 'translate(-50%, -50%)',
-            zIndex: 3
+            zIndex: 3,
+            pointerEvents: isScraperFocus ? 'auto' : 'none'
           }}
         >
           <button
             onClick={(e) => {
               e.preventDefault();
               console.log('Start Scraping button clicked by user');
+              setIsScraperFocus(false); // Reset focus state when scraping starts
               startScraping();
             }}
-            disabled={progress.status === 'running' || (config.cities?.length || 0) === 0}
+            disabled={!isScraperFocus || progress.status === 'running' || (config.cities?.length || 0) === 0}
             className={`transition-colors ${
-              progress.status === 'running' || (config.cities?.length || 0) === 0
+              !isScraperFocus || progress.status === 'running' || (config.cities?.length || 0) === 0
                 ? 'opacity-50 cursor-not-allowed'
                 : ''
             }`}
@@ -639,26 +652,26 @@ export default function Section2({
               backgroundColor: 'transparent',
               padding: 0,
               border: 'none',
-              cursor: 'pointer'
+              cursor: isScraperFocus ? 'pointer' : 'not-allowed'
             }}
             onMouseEnter={(e) => {
-              if (progress.status !== 'running' && (config.cities?.length || 0) > 0) {
+              if (isScraperFocus && progress.status !== 'running' && (config.cities?.length || 0) > 0) {
                 e.currentTarget.style.backgroundColor = '#ffffff';
               }
             }}
             onMouseLeave={(e) => {
-              if (progress.status !== 'running' && (config.cities?.length || 0) > 0) {
+              if (isScraperFocus && progress.status !== 'running' && (config.cities?.length || 0) > 0) {
                 e.currentTarget.style.backgroundColor = 'transparent';
               }
             }}
             type="button"
-            title={progress.status === 'running' 
-              ? 'Scraping in Progress...' 
+            title={!isScraperFocus ? 'Press Shift+S to enable scraper mode'
+              : progress.status === 'running' ? 'Scraping in Progress...'
               : `Start Scraper at ${getIntensityName(config.maxResults || 20, config.searchRadius || 10)} Intensity (Click to Confirm)`
             }
           />
         </div>
-
+        
         <div className="space-y-4 flex-1 overflow-y-auto w-full">
           <div>
             {/* Removed the horizontal slider - now it's vertical on the line */}

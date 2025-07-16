@@ -281,7 +281,8 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
       totalOffices: totalOfficesFound,
       totalCities: cities.length,
       results: results,
-      summary: dataOutput.generateSummary(results)
+      summary: dataOutput.generateSummary(results),
+      scrapedCities: [...cities] // Add the cities that were scraped
     };
     
     console.log(`Final results prepared: ${totalOfficesFound} offices from ${cities.length} cities`);

@@ -184,3 +184,11 @@ export interface LatvianCity {
   nameEn: string;
   searchTerms: string[];
 } 
+
+interface ScrapingResults {
+  totalOffices: number;
+  totalCities: number;
+  results: any[];
+  summary: string;
+  scrapedCities: string[]; // Store the cities that were actually scraped
+} 

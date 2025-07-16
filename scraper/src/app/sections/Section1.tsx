@@ -26,6 +26,7 @@ interface ScrapingResults {
   totalCities: number;
   results: any[];
   summary: string;
+  scrapedCities?: string[];
 }
 
 interface Section1Props {
@@ -86,7 +87,7 @@ export default function Section1({
                 </div>
                 <div>
                   <span className="text-[#ffffff]">Cities Scraped:</span>
-                  <span className="font-medium ml-2 text-[#ffffff]">{config.cities?.join(', ')}</span>
+                  <span className="font-medium ml-2 text-[#ffffff]">{results.scrapedCities?.join(', ')}</span>
                 </div>
                 <div>
                   <span className="text-[#ffffff]">Time Taken:</span>
