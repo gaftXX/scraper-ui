@@ -78,12 +78,17 @@ export default function ScraperInterface() {
   const [logs, setLogs] = useState<string[]>([]);
   const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
   const [showCompendium, setShowCompendium] = useState(false);
+  const [showSystem, setShowSystem] = useState(false);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
   const [resetSection2Focus, setResetSection2Focus] = useState<number>(0);
   
   // Use a ref to store the latest config to avoid stale closure issues
   const configRef = useRef<ScraperConfig>(config);
   configRef.current = config;
+  
+  // Use a ref to store the latest autoScroll state to avoid stale closure issues
+  const autoScrollRef = useRef<boolean>(autoScroll);
+  autoScrollRef.current = autoScroll;
 
   // Timer effect to track scraping duration
   useEffect(() => {
@@ -134,6 +139,13 @@ export default function ScraperInterface() {
       setProgress(prev => ({ ...prev, status: 'idle' }));
     }
   }, []); // Empty dependency array = runs only once on mount
+
+  // Close system UI when scraper starts running
+  useEffect(() => {
+    if (progress.status === 'running') {
+      setShowSystem(false);
+    }
+  }, [progress.status]);
 
   // Debug useEffect to monitor config changes
   useEffect(() => {
@@ -210,8 +222,8 @@ export default function ScraperInterface() {
         const newConfig = {
           ...prev,
           searchCategories: selected 
-            ? [categoryId] // Only allow one category at a time
-            : [] // If deselecting, clear all categories
+            ? [...(prev.searchCategories || []), categoryId]
+            : (prev.searchCategories || []).filter((c: SearchCategory) => c !== categoryId)
         };
         console.log('=== DEBUG: New config after category change ===');
         console.log('New config:', newConfig);
@@ -223,10 +235,20 @@ export default function ScraperInterface() {
 
   const handleCompendiumClick = () => {
     setShowCompendium(true);
+    setShowSystem(false); // Close system when opening compendium
   };
 
   const resetCompendiumState = () => {
     setShowCompendium(false);
+  };
+
+  const handleSystemClick = () => {
+    setShowSystem(true);
+    setShowCompendium(false); // Close compendium when opening system
+  };
+
+  const resetSystemState = () => {
+    setShowSystem(false);
   };
 
   // Helper function to get intensity level from current maxResults and searchRadius
@@ -301,14 +323,20 @@ export default function ScraperInterface() {
       const newLogs = [...prev, `${time}: ${message}`];
       
       // Auto-scroll to bottom if auto-scroll is enabled
-      if (autoScroll) {
-        setTimeout(() => {
-          const container = document.getElementById('logs-container');
-          if (container) {
-            // Always scroll to bottom when auto-scroll is enabled
-            container.scrollTop = container.scrollHeight;
-          }
-        }, 100); // Shorter timeout for more responsive scrolling
+      // Use the ref to get the current autoScroll state
+      if (autoScrollRef.current) {
+        // Use requestAnimationFrame for better timing
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            const container = document.getElementById('logs-container');
+            if (container) {
+              // Check the current autoScroll state again in case it changed
+              if (autoScrollRef.current) {
+                container.scrollTop = container.scrollHeight;
+              }
+            }
+          }, 50); // Even shorter timeout for more responsive scrolling
+        });
       }
       
       return newLogs;
@@ -327,6 +355,8 @@ export default function ScraperInterface() {
   const toggleAutoScroll = () => {
     setAutoScroll(prev => !prev);
   };
+
+
 
   // Function to reset Section2 focus state
   const triggerSection2FocusReset = () => {
@@ -424,23 +454,10 @@ export default function ScraperInterface() {
       }
     };
 
-    // Explicit confirmation dialog for user consent
-    const confirmStart = window.confirm(
-      `Start scraping ${scrapingConfig.cities?.length || 0} cities with ${scrapingConfig.searchCategories?.length || 0} categories?\n\n` +
-      `Selected cities: ${scrapingConfig.cities?.join(', ') || 'None'}\n` +
-      `Categories: ${scrapingConfig.searchCategories?.join(', ') || 'Default'}\n` +
-      `Intensity Level: ${getIntensityName(intensityLevel)} (${scrapingConfig.maxResults} max results, ${scrapingConfig.searchRadius}km radius)\n\n` +
-      `Click OK to proceed or Cancel to abort.`
-    );
-
-    if (!confirmStart) {
-      return;
-    }
-
-    // Log explicit user action and current config
-    console.log('User explicitly confirmed and started scraper');
+    // Log current config being sent to scraper
+    console.log('User started scraper');
     console.log('Current config being sent to scraper:', scrapingConfig);
-    addLog('User confirmed and started scraper manually');
+    addLog('User started scraper');
     addLog(`Config: ${scrapingConfig.cities?.length || 0} cities, ${scrapingConfig.searchCategories?.length || 0} categories, ${scrapingConfig.maxResults} max results, ${scrapingConfig.searchRadius}km radius`);
     
     // Reset Section2 focus state
@@ -593,6 +610,8 @@ export default function ScraperInterface() {
             currentSearchTerms={currentSearchTerms}
             autoScroll={autoScroll}
             toggleAutoScroll={toggleAutoScroll}
+            showSystem={showSystem}
+            resetSystemState={resetSystemState}
           />
         </div>
 
@@ -610,6 +629,7 @@ export default function ScraperInterface() {
             results={results}
             logs={logs}
             onCompendiumClick={handleCompendiumClick}
+            onSystemClick={handleSystemClick}
             resetFocusTrigger={resetSection2Focus}
           />
         </div>

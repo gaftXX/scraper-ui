@@ -1580,8 +1580,14 @@ export class GoogleMapsArchitectureScraper {
         scrollAttempts++;
         
         // Early exit if we've been consistently failing and have reasonable results
-        if (consecutiveFailures >= 5 && totalLoadedResults >= 20) {
+        if (consecutiveFailures >= 2 && totalLoadedResults >= 20) {
           console.log(`Multiple consecutive failures with ${totalLoadedResults} results loaded, may have reached end`);
+          break;
+        }
+        
+        // Early exit after 2 consecutive failures regardless of results
+        if (consecutiveFailures >= 2) {
+          console.log(`2 consecutive failures detected, canceling scroll to prevent wasting time`);
           break;
         }
         

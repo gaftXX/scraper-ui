@@ -134,7 +134,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
         setFirestoreData(data.offices || []);
         console.log('Fetched Firestore data:', data.offices?.length || 0, 'offices');
       } else {
-        console.error('Failed to fetch Firestore data');
+        console.error('Failed to fetch Firestore data - using empty data');
         setFirestoreData([]);
       }
     } catch (error) {

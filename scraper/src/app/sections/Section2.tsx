@@ -16,6 +16,7 @@ interface Section2Props {
   results: any;
   logs: string[];
   onCompendiumClick: () => void;
+  onSystemClick: () => void;
   resetFocusTrigger: number;
 }
 
@@ -44,6 +45,7 @@ export default function Section2({
   results,
   logs,
   onCompendiumClick,
+  onSystemClick,
   resetFocusTrigger
 }: Section2Props) {
   // Create refs for all cities upfront
@@ -444,7 +446,7 @@ export default function Section2({
               />
             </div>
             
-            {/* Dashboard button positioned on the right line */}
+            {/* Dashboard buttons positioned on the right line */}
             <div 
               className={`absolute transition-opacity duration-300 ${isDashboardFocus ? 'opacity-100' : 'opacity-0'}`}
               style={{
@@ -455,43 +457,83 @@ export default function Section2({
                 pointerEvents: isDashboardFocus ? 'auto' : 'none'
               }}
             >
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  console.log('Dashboard button clicked');
-                  setIsDashboardFocus(false); // Reset dashboard focus state
-                  setIsScraperFocus(false); // Reset scraper focus state
-                  onCompendiumClick(); // Call the parent handler
-                }}
-                disabled={!isDashboardFocus}
-                className={`transition-colors ${
-                  !isDashboardFocus
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''
-                }`}
-                style={{
-                  width: '80px',
-                  height: '15px',
-                  backgroundColor: '#393837',
-                  padding: '0 8px',
-                  border: 'none',
-                  cursor: isDashboardFocus ? 'pointer' : 'not-allowed',
-                  color: 'white',
-                  fontSize: '9px',
-                  fontWeight: 'bold',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                type="button"
-                title={!isDashboardFocus ? 'Press Shift+D to enable dashboard mode'
-                  : 'Dashboard Button (Click to interact)'
-                }
-              >
-                COMPENDIUM
-              </button>
+              <div className="flex space-x-4">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    console.log('Dashboard button clicked');
+                    setIsDashboardFocus(false); // Reset dashboard focus state
+                    setIsScraperFocus(false); // Reset scraper focus state
+                    onCompendiumClick(); // Call the parent handler
+                  }}
+                  disabled={!isDashboardFocus}
+                  className={`transition-colors ${
+                    !isDashboardFocus
+                      ? 'opacity-50 cursor-not-allowed'
+                      : ''
+                  }`}
+                  style={{
+                    width: '80px',
+                    height: '15px',
+                    backgroundColor: '#393837',
+                    padding: '0 8px',
+                    border: 'none',
+                    cursor: isDashboardFocus ? 'pointer' : 'not-allowed',
+                    color: 'white',
+                    fontSize: '9px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  type="button"
+                  title={!isDashboardFocus ? 'Press Shift+D to enable dashboard mode'
+                    : 'Dashboard Button (Click to interact)'
+                  }
+                >
+                  COMPENDIUM
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    console.log('System button clicked');
+                    setIsDashboardFocus(false); // Reset dashboard focus state
+                    setIsScraperFocus(false); // Reset scraper focus state
+                    onSystemClick(); // Call the parent handler
+                  }}
+                  disabled={!isDashboardFocus || progress.status === 'running'}
+                  className={`transition-colors ${
+                    !isDashboardFocus || progress.status === 'running'
+                      ? 'opacity-50 cursor-not-allowed'
+                      : ''
+                  }`}
+                  style={{
+                    width: '50px',
+                    height: '15px',
+                    backgroundColor: '#393837',
+                    padding: '0 8px',
+                    border: 'none',
+                    cursor: isDashboardFocus && progress.status !== 'running' ? 'pointer' : 'not-allowed',
+                    color: 'white',
+                    fontSize: '9px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  type="button"
+                  title={!isDashboardFocus ? 'Press Shift+D to enable dashboard mode'
+                    : progress.status === 'running' ? 'System unavailable while scraper is running'
+                    : 'System Button (Click to interact)'
+                  }
+                >
+                  SYSTEM
+                </button>
+              </div>
             </div>
           </div>
           
