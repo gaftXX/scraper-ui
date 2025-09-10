@@ -230,11 +230,12 @@ export class FirebaseService {
     
     try {
       const existingOffices = await this.getAllOffices(country);
-      const newOffices: ArchitectureOffice[] = [];
+      const resultOffices: ArchitectureOffice[] = [];
       let duplicatesFound = 0;
+      let newOfficesFound = 0;
 
       for (const office of offices) {
-        const isDuplicate = existingOffices.some(existing => {
+        const existingOffice = existingOffices.find(existing => {
           // Check for duplicates based on name and address
           const nameMatch = existing.name && office.name && 
                            existing.name.toLowerCase().trim() === office.name.toLowerCase().trim();
@@ -249,17 +250,27 @@ export class FirebaseService {
           return placeIdMatch || (nameMatch && addressMatch);
         });
 
-        if (!isDuplicate) {
-          // Mark as new office (not existing in database)
-          newOffices.push({ ...office, existedInDatabase: false });
-        } else {
+        if (existingOffice) {
+          // This is a duplicate - preserve the existing office with its modifiedName
           duplicatesFound++;
           console.log(`Duplicate found: ${office.name} - ${office.address}`);
+          
+          // Preserve the existing office data (including modifiedName) but update other fields
+          resultOffices.push({
+            ...existingOffice, // Keep existing data including modifiedName
+            ...office, // Update with fresh scraped data
+            modifiedName: existingOffice.modifiedName, // Explicitly preserve modifiedName
+            existedInDatabase: true
+          });
+        } else {
+          // This is a new office
+          newOfficesFound++;
+          resultOffices.push({ ...office, existedInDatabase: false });
         }
       }
 
-      console.log(`Duplicate check complete: ${newOffices.length} new, ${duplicatesFound} duplicates`);
-      return newOffices;
+      console.log(`Duplicate check complete: ${newOfficesFound} new, ${duplicatesFound} duplicates (preserved with modifiedName)`);
+      return resultOffices;
     } catch (error) {
       console.error('Error checking for duplicates:', error);
       // If error occurs, return all offices marked as not existing in database
@@ -275,11 +286,12 @@ export class FirebaseService {
     
     try {
       const existingOffices = await this.getAllOfficesInCategory(category, country);
-      const newOffices: ArchitectureOffice[] = [];
+      const resultOffices: ArchitectureOffice[] = [];
       let duplicatesFound = 0;
+      let newOfficesFound = 0;
 
       for (const office of offices) {
-        const isDuplicate = existingOffices.some(existing => {
+        const existingOffice = existingOffices.find(existing => {
           // Check for duplicates based on name and address
           const nameMatch = existing.name && office.name && 
                            existing.name.toLowerCase().trim() === office.name.toLowerCase().trim();
@@ -294,17 +306,27 @@ export class FirebaseService {
           return placeIdMatch || (nameMatch && addressMatch);
         });
 
-        if (!isDuplicate) {
-          // Mark as new office (not existing in database)
-          newOffices.push({ ...office, existedInDatabase: false });
-        } else {
+        if (existingOffice) {
+          // This is a duplicate - preserve the existing office with its modifiedName
           duplicatesFound++;
           console.log(`Duplicate found in ${category}: ${office.name} - ${office.address}`);
+          
+          // Preserve the existing office data (including modifiedName) but update other fields
+          resultOffices.push({
+            ...existingOffice, // Keep existing data including modifiedName
+            ...office, // Update with fresh scraped data
+            modifiedName: existingOffice.modifiedName, // Explicitly preserve modifiedName
+            existedInDatabase: true
+          });
+        } else {
+          // This is a new office
+          newOfficesFound++;
+          resultOffices.push({ ...office, existedInDatabase: false });
         }
       }
 
-      console.log(`Duplicate check complete for ${category}: ${newOffices.length} new, ${duplicatesFound} duplicates`);
-      return newOffices;
+      console.log(`Duplicate check complete for ${category}: ${newOfficesFound} new, ${duplicatesFound} duplicates (preserved with modifiedName)`);
+      return resultOffices;
     } catch (error) {
       console.error(`Error checking for duplicates in ${category}:`, error);
       // If error occurs, return all offices marked as not existing in database
@@ -390,40 +412,41 @@ export class FirebaseService {
       console.log(`Total offices in ${category}: ${allOffices.length}`);
 
       // Check for duplicates within this category
-      const newOffices = await this.findDuplicateOfficesInCategory(allOffices, category, country);
+      const processedOffices = await this.findDuplicateOfficesInCategory(allOffices, category, country);
       
-      if (newOffices.length === 0) {
-        console.log(`No new offices to save in ${category} (all were duplicates)`);
+      if (processedOffices.length === 0) {
+        console.log(`No offices to process in ${category}`);
         continue;
       }
 
-      // Create new results with only new offices
+      // Create new results with processed offices (both new and existing with preserved modifiedName)
       const newResults: SearchResult[] = [];
       
       for (const result of categoryResults) {
-        const cityNewOffices = newOffices.filter(office => {
+        const cityProcessedOffices = processedOffices.filter(office => {
           // Try to match offices back to their original cities
           return result.offices.some(originalOffice => 
             originalOffice.name === office.name && originalOffice.address === office.address
           );
         });
 
-        if (cityNewOffices.length > 0) {
+        if (cityProcessedOffices.length > 0) {
           newResults.push({
             ...result,
-            offices: cityNewOffices,
-            totalFound: cityNewOffices.length
+            offices: cityProcessedOffices,
+            totalFound: cityProcessedOffices.length
           });
         }
       }
 
-      // Save only new offices for this category
+      // Save processed offices for this category (both new and existing with preserved modifiedName)
       for (const result of newResults) {
         await this.saveSearchResult(result, category, country);
       }
       
-      totalNewOffices += newOffices.length;
-              console.log(`Saved ${newOffices.length} new offices to ${category} collection`);
+      const newOfficesCount = processedOffices.filter(office => !office.existedInDatabase).length;
+      totalNewOffices += newOfficesCount;
+      console.log(`Saved ${processedOffices.length} offices to ${category} collection (${newOfficesCount} new, ${processedOffices.length - newOfficesCount} existing with preserved modifiedName)`);
     }
     
     console.log(`\nSuccessfully saved ${totalNewOffices} new offices across ${resultsByCategory.size} category collections`);
@@ -560,7 +583,9 @@ export class FirebaseService {
                 placeId: data.placeId,
                 city: cityName,
                 category: data.category || categoryCollection.id,
-                uniqueId: data.uniqueId
+                uniqueId: data.uniqueId,
+                modifiedName: data.modifiedName,
+                modifiedAt: data.modifiedAt
               });
             }
           });
@@ -612,7 +637,9 @@ export class FirebaseService {
               placeId: data.placeId,
               city: cityName,
               category: category,
-              uniqueId: data.uniqueId
+              uniqueId: data.uniqueId,
+              modifiedName: data.modifiedName,
+              modifiedAt: data.modifiedAt
             });
           }
         });

@@ -77,34 +77,43 @@ export default function Section1({
                 CLOSE
               </button>
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center">
-              <div className="text-center text-[#ffffff] mb-6">
-                <h3 className="text-md font-medium mb-4">Country Selection</h3>
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => handleCountryChange?.('latvia')}
-                    className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                      config.country === 'latvia'
-                        ? 'bg-[#4a90e2] text-white'
-                        : 'bg-[#393837] text-[#ffffff] hover:bg-[#4a4a4a]'
-                    }`}
-                  >
-                    Latvia
-                  </button>
-                  <button
-                    onClick={() => handleCountryChange?.('spain')}
-                    className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                      config.country === 'spain' || !config.country
-                        ? 'bg-[#4a90e2] text-white'
-                        : 'bg-[#393837] text-[#ffffff] hover:bg-[#4a4a4a]'
-                    }`}
-                  >
-                    Spain
-                  </button>
-                </div>
-                <p className="text-xs text-[#ffffff] opacity-70 mt-2">
-                  Select a country to change available cities
-                </p>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-4 text-[#ffffff]">
+                <button
+                  onClick={() => handleCountryChange?.('latvia')}
+                  className={`text-sm font-medium transition-all cursor-pointer ${
+                    config.country === 'latvia'
+                      ? 'text-[#ffffff] opacity-100'
+                      : 'text-[#ffffff] opacity-40 hover:opacity-60'
+                  }`}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  Latvia
+                </button>
+                <button
+                  onClick={() => handleCountryChange?.('spain')}
+                  className={`text-sm font-medium transition-all cursor-pointer ${
+                    config.country === 'spain' || !config.country
+                      ? 'text-[#ffffff] opacity-100'
+                      : 'text-[#ffffff] opacity-40 hover:opacity-60'
+                  }`}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  Spain
+                </button>
+              </div>
+              <div className="text-[#ffffff]">
+                <h3 className="text-md font-medium">Region Selection</h3>
+              </div>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-[#ffffff]">
               </div>
             </div>
           </div>
@@ -233,7 +242,16 @@ export default function Section1({
                                           {office.address || 'No address available'}
                                         </td>
                                         <td className="py-0 pl-[5px] text-[#ffffff] border-r border-gray-500">
-                                          {office.website ? office.website.replace(/^https?:\/\//, '') : '-'}
+                                          {office.website ? (
+                                            <a
+                                              href={office.website.startsWith('http') ? office.website : `https://${office.website}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-[#ffffff] cursor-pointer"
+                                            >
+                                              {office.website.replace(/^https?:\/\//, '')}
+                                            </a>
+                                          ) : '-'}
                                         </td>
                                         <td className="py-0 pl-[5px] text-[#ffffff]">
                                           {office.existedInDatabase ? (

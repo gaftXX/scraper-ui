@@ -22,11 +22,8 @@ export const metadata: Metadata = {
     userScalable: false,
   },
   other: {
-    'apple-mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-status-bar-style': 'default',
     'format-detection': 'telephone=no',
     'mobile-web-app-capable': 'yes',
-    'apple-touch-fullscreen': 'yes',
   },
 };
 

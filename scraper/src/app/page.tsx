@@ -262,7 +262,6 @@ export default function ScraperInterface() {
 
   const handleSystemClick = () => {
     setShowSystem(true);
-    setShowCompendium(false); // Close compendium when opening system
   };
 
   const resetSystemState = () => {

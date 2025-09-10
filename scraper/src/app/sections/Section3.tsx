@@ -28,6 +28,7 @@ interface FirestoreOffice {
   businessLabels?: string[];
   category?: string;
   uniqueId?: string; // Added for Spanish offices (B---S format)
+  modifiedName?: string; // Added for custom office names
   timestamp?: any;
 }
 
@@ -39,7 +40,7 @@ interface CityData {
 // City ordering for both countries
 // City ordering is now handled by the centralized country configuration
 
-// Helper function to clean address display
+// Helper function to display street name, number, and district only
 const cleanAddressDisplay = (address: string, city?: string): string => {
   if (!address) return address;
   
@@ -60,15 +61,17 @@ const cleanAddressDisplay = (address: string, city?: string): string => {
     .replace(/,\s*$/, '') // Remove trailing comma
     .trim();
   
-  // Simplify addresses for Barcelona - remove city name and country if present
-  if (city === 'Barcelona') {
-    cleanedAddress = cleanedAddress
-      .replace(/,\s*Barcelona,?\s*Spain?/gi, '') // Remove ", Barcelona, Spain"
-      .replace(/,\s*Barcelona/gi, '') // Remove ", Barcelona"
-      .replace(/Barcelona,?\s*/gi, '') // Remove "Barcelona, " or "Barcelona "
-      .replace(/,\s*Spain?/gi, '') // Remove ", Spain"
-      .trim();
-  }
+  // Remove city names and countries - keep only street name, number, and district
+  cleanedAddress = cleanedAddress
+    .replace(/,\s*[^,]+,\s*[^,]+$/g, '') // Remove last two parts (usually city, country)
+    .replace(/,\s*[^,]+$/g, '') // Remove last part (usually city)
+    .trim();
+  
+  // Additional cleanup for common patterns
+  cleanedAddress = cleanedAddress
+    .replace(/^[^a-zA-Z0-9\s]*/, '') // Remove any remaining non-alphanumeric characters at start
+    .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
+    .trim();
   
   return cleanedAddress;
 };
@@ -86,6 +89,10 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
   const [filteredData, setFilteredData] = useState<FirestoreOffice[]>([]);
   const [newOffices, setNewOffices] = useState<Set<string>>(new Set()); // Track new offices for highlighting
   const [previousData, setPreviousData] = useState<FirestoreOffice[]>([]); // Track previous data to detect truly new offices
+  const [editingOfficeId, setEditingOfficeId] = useState<string | null>(null); // Track which office name is being edited
+  const [editingName, setEditingName] = useState<string>(''); // Track the current editing name
+  const [savingOfficeId, setSavingOfficeId] = useState<string | null>(null); // Track which office is being saved
+  const [editModeEnabled, setEditModeEnabled] = useState<boolean>(false); // Track if edit mode is enabled
 
   // Debug logging
   console.log('Section3 props:', { showCompendium, results: !!results, resultsLength: results?.results?.length });
@@ -128,11 +135,13 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
       const newOfficeIds = new Set<string>();
       
       firestoreData.forEach(office => {
-        const officeId = `${office.name}-${office.address}-${office.city}`;
+        const displayName = office.modifiedName || office.name;
+        const officeId = `${displayName}-${office.address}-${office.city}`;
         
         // Check if this office exists in previous data
         const existsInPrevious = previousData.some(prevOffice => {
-          const prevOfficeId = `${prevOffice.name}-${prevOffice.address}-${prevOffice.city}`;
+          const prevDisplayName = prevOffice.modifiedName || prevOffice.name;
+          const prevOfficeId = `${prevDisplayName}-${prevOffice.address}-${prevOffice.city}`;
           return prevOfficeId === officeId;
         });
         
@@ -172,8 +181,31 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
 
       if (response.ok) {
         const data = await response.json();
-        setFirestoreData(data.offices || []);
-        console.log('Fetched Firestore data:', data.offices?.length || 0, 'offices');
+        const freshOffices = data.offices || [];
+        
+        // Preserve any locally modified names that haven't been saved yet
+        setFirestoreData(prevData => {
+          const mergedData = freshOffices.map((freshOffice: FirestoreOffice) => {
+            // Find if this office exists in previous data with a modified name
+            const existingOffice = prevData.find(prevOffice => 
+              prevOffice.uniqueId === freshOffice.uniqueId
+            );
+            
+            // If the office exists in previous data and has a modified name, preserve it
+            if (existingOffice && existingOffice.modifiedName && existingOffice.modifiedName !== existingOffice.name) {
+              return {
+                ...freshOffice,
+                modifiedName: existingOffice.modifiedName
+              };
+            }
+            
+            return freshOffice;
+          });
+          
+          return mergedData;
+        });
+        
+        console.log('Fetched Firestore data:', freshOffices.length, 'offices');
       } else {
         console.error('Failed to fetch Firestore data - using empty data');
         setFirestoreData([]);
@@ -368,13 +400,92 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
     setCurrentIndex(newHistory.length - 1);
   };
 
+  // Handle starting to edit an office name
+  const handleStartEdit = (officeId: string, currentName: string) => {
+    setEditingOfficeId(officeId);
+    setEditingName(currentName);
+  };
+
+  // Handle canceling edit
+  const handleCancelEdit = (originalName?: string) => {
+    setEditingOfficeId(null);
+    setEditingName('');
+    // If originalName is provided, revert the contentEditable element
+    if (originalName) {
+      const element = document.querySelector(`[contenteditable="true"]`);
+      if (element) {
+        element.textContent = originalName;
+      }
+    }
+  };
+
+  // Handle saving the modified name
+  const handleSaveEdit = async (officeId: string) => {
+    if (!editingName.trim()) {
+      handleCancelEdit();
+      return;
+    }
+
+    // Set saving state to show flashing animation
+    setSavingOfficeId(officeId);
+    
+    // Immediately blur the contentEditable element to unselect it
+    const element = document.querySelector(`[contenteditable="true"]`);
+    if (element) {
+      (element as HTMLElement).blur();
+    }
+
+    try {
+      const response = await fetch('/api/update-office-name', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          officeId,
+          modifiedName: editingName.trim()
+        })
+      });
+
+      if (response.ok) {
+        // Update the local data with the modified name
+        setFirestoreData(prevData => 
+          prevData.map(office => 
+            office.uniqueId === officeId 
+              ? { ...office, modifiedName: editingName.trim() }
+              : office
+          )
+        );
+        setFilteredData(prevData => 
+          prevData.map(office => 
+            office.uniqueId === officeId 
+              ? { ...office, modifiedName: editingName.trim() }
+              : office
+          )
+        );
+        console.log('Office name updated successfully');
+      } else {
+        console.error('Failed to update office name');
+      }
+    } catch (error) {
+      console.error('Error updating office name:', error);
+    } finally {
+      // Clear saving state after a short delay to show the animation
+      setTimeout(() => {
+        setSavingOfficeId(null);
+        handleCancelEdit();
+      }, 1000);
+    }
+  };
+
   return (
     <div className="col-span-2 h-full">
       <div className="h-full flex flex-col">
         {showCompendium && (
           <div className="flex-1 overflow-hidden">
             {/* Navigation Buttons */}
-            <div className="flex items-center space-x-2 mb-0">
+            <div className="flex items-center justify-between mb-0">
+              <div className="flex items-center space-x-2">
               {!showCities && !showCategories && !showData && (
                 <button
                   onClick={handleShowCities}
@@ -495,6 +606,33 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                     ))}
                 </>
               )}
+              </div>
+              {showData && (
+                <>
+                  <style jsx>{`
+                    @keyframes flash {
+                      0% { opacity: 0.3; }
+                      50% { opacity: 1; }
+                      100% { opacity: 0.3; }
+                    }
+                    .flash-animation {
+                      animation: flash 1s ease-in-out infinite;
+                    }
+                  `}</style>
+                  <button
+                    onClick={() => setEditModeEnabled(!editModeEnabled)}
+                    className={`px-3 py-2 bg-[#393837] text-white text-sm font-medium hover:opacity-50 transition-opacity duration-300 ${
+                      editModeEnabled ? 'flash-animation' : ''
+                    }`}
+                    style={{
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    EDIT
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Header */}
@@ -536,7 +674,8 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                   <table className="w-full text-sm">
                     <tbody>
                       {filteredData.map((office: FirestoreOffice, officeIndex: number) => {
-                        const officeId = `${office.name}-${office.address}-${office.city}`;
+                        const displayName = office.modifiedName || office.name;
+                        const officeId = `${displayName}-${office.address}-${office.city}`;
                         const isNewOffice = newOffices.has(officeId);
                         const countdownNumber = officeIndex + 1; // Count up from 1
                         
@@ -557,11 +696,13 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                               {countdownNumber}
                             </td>
                             {/* Unique ID Column */}
-                            <td className={`py-0 border-r border-gray-500 ${
+                            <td className={`py-0 ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`} style={{ width: '60px', textAlign: 'center' }}>
                               {office.uniqueId && (
-                                <div className="text-xs font-mono text-blue-600">
+                                <div className={`text-xs font-mono ${
+                                  isNewOffice ? 'text-black' : 'text-[#ffffff]'
+                                }`}>
                                   {office.uniqueId}
                                 </div>
                               )}
@@ -570,11 +711,37 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                             <td className={`py-0 border-r border-gray-500 ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`}>
-                              <div className="pl-[13px]">
-                                <div className={`font-medium ${
-                                  isNewOffice ? 'text-black' : 'text-[#ffffff]'
-                                }`}>
-                                  {office.name}
+                              <div>
+                                <div 
+                                  contentEditable={editingOfficeId === office.uniqueId}
+                                  suppressContentEditableWarning={true}
+                                  className={`font-medium ${editModeEnabled ? 'cursor-pointer hover:opacity-50 transition-opacity duration-300' : 'cursor-default'} ${
+                                    isNewOffice ? 'text-black' : 'text-[#ffffff]'
+                                  } ${editingOfficeId === office.uniqueId ? 'outline-none' : ''} ${
+                                    savingOfficeId === office.uniqueId ? 'animate-pulse' : ''
+                                  }`}
+                                  onClick={() => editModeEnabled && handleStartEdit(office.uniqueId!, office.modifiedName || office.name)}
+                                  onInput={(e) => setEditingName(e.currentTarget.textContent || '')}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleSaveEdit(office.uniqueId!);
+                                    } else if (e.key === 'Escape') {
+                                      const originalName = office.modifiedName || office.name;
+                                      handleCancelEdit(originalName);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    // Only cancel if not currently saving
+                                    if (savingOfficeId !== office.uniqueId) {
+                                      // Revert content back to original name
+                                      const originalName = office.modifiedName || office.name;
+                                      handleCancelEdit(originalName);
+                                    }
+                                  }}
+                                  title={editingOfficeId === office.uniqueId ? "Press Enter to save, Escape to cancel" : ""}
+                                >
+                                  {office.modifiedName || office.name}
                                 </div>
                                 {office.phone && <div className={`text-xs ${
                                   isNewOffice ? 'text-black' : 'text-[#ffffff]'
@@ -583,13 +750,24 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                             </td>
                             <td className={`py-0 pl-[5px] border-r border-gray-500 ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
-                            }`}>
+                            }`} style={{ width: '330px' }}>
                               {office.address ? cleanAddressDisplay(office.address, office.city) : '-'}
                             </td>
                             <td className={`py-0 pl-[5px] ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`}>
-                              {office.website ? office.website.replace(/^https?:\/\//, '') : '-'}
+                              {office.website ? (
+                                <a
+                                  href={office.website.startsWith('http') ? office.website : `https://${office.website}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`cursor-pointer ${
+                                    isNewOffice ? 'text-black' : 'text-[#ffffff]'
+                                  }`}
+                                >
+                                  {office.website.replace(/^https?:\/\//, '')}
+                                </a>
+                              ) : '-'}
                             </td>
                           </tr>
                         );

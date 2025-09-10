@@ -60,6 +60,9 @@ export default function Section2({
   // Add state for dashboard focus mode
   const [isDashboardFocus, setIsDashboardFocus] = useState(false);
 
+  // Add state for cross visibility
+  const [isCrossVisible, setIsCrossVisible] = useState(true);
+
   // Add keyboard event listener
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
@@ -67,12 +70,20 @@ export default function Section2({
       if (event.key.toLowerCase() === 's' && event.shiftKey && progress.status !== 'running') {
         setIsScraperFocus(prev => !prev); // Toggle the state
         setIsDashboardFocus(false); // Close dashboard focus when opening scraper focus
+        setIsCrossVisible(true); // Show cross when entering scraper focus
       }
       
       // Allow Shift+D toggle even when scraper is running
       if (event.key.toLowerCase() === 'd' && event.shiftKey) {
         setIsDashboardFocus(prev => !prev); // Toggle the state
         setIsScraperFocus(false); // Close scraper focus when opening dashboard focus
+        setIsCrossVisible(true); // Show cross when entering dashboard focus
+      }
+
+      // Toggle cross visibility with Shift+H
+      if (event.key.toLowerCase() === 'h' && event.shiftKey) {
+        console.log('Shift+H pressed - toggling cross visibility');
+        setIsCrossVisible(prev => !prev); // Toggle cross visibility
       }
 
       // Start scraper with Enter when in scraper focus and not running
@@ -86,13 +97,14 @@ export default function Section2({
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, [progress.status, isScraperFocus, config.cities?.length]); // Remove startScraping from dependencies
+  }, [progress.status, isScraperFocus, isDashboardFocus, isCrossVisible, config.cities?.length]); // Include all state dependencies
 
   // Reset focus states when resetFocusTrigger changes
   useEffect(() => {
     if (resetFocusTrigger > 0) {
       setIsScraperFocus(false);
       setIsDashboardFocus(false);
+      setIsCrossVisible(true); // Show cross when resetting focus
     }
   }, [resetFocusTrigger]);
 
@@ -135,11 +147,12 @@ export default function Section2({
         
         {/* Vertical line in the middle */}
         <div 
-          className="absolute"
+          className="absolute transition-opacity duration-300"
           style={{
             left: '50%',
             top: '50%',
-            transform: 'translate(-50%, -50%)'
+            transform: 'translate(-50%, -50%)',
+            opacity: isCrossVisible ? 1 : 0
           }}
         >
           {/* Top part of the line */}

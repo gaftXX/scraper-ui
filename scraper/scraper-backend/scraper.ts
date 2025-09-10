@@ -68,19 +68,6 @@ export class GoogleMapsArchitectureScraper {
     return 2 + intensityLevel; // 3, 4, 5, 6, 7
   }
 
-  /**
-   * Clean address text by removing unwanted symbols and characters
-   */
-  private cleanAddress(address: string): string {
-    if (!address) return address;
-    
-    // Remove common unwanted symbols that appear before addresses
-    return address
-      .replace(/^[^\w\s]*/, '') // Remove non-word characters at the start
-      .replace(/^\s*[-–—•·]\s*/, '') // Remove dashes, bullets, dots at start
-      .replace(/^\s*[^\p{L}\p{N}]*/, '') // Remove non-letter/number characters at start
-      .trim();
-  }
 
   /**
    * Load existing unique IDs from database to prevent collisions
@@ -770,7 +757,7 @@ export class GoogleMapsArchitectureScraper {
             for (const element of elements) {
               const text = await element.evaluate(el => el?.textContent?.trim() || '');
               if (text && (text.includes('iela') || text.includes('Rīga') || text.includes('LV-'))) {
-                address = this.cleanAddress(text); // Clean unwanted symbols
+                address = text;
                 break;
               }
             }
@@ -778,7 +765,7 @@ export class GoogleMapsArchitectureScraper {
             address = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           }
           if (address) {
-            address = this.cleanAddress(address); // Clean unwanted symbols
+            // Address is already clean from extraction
             break;
           }
         } catch {
@@ -944,7 +931,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           address = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           if (address) {
-            address = this.cleanAddress(address); // Clean unwanted symbols
+            // Address is already clean from extraction
             console.log(`Found address with selector: ${selector}`);
             break;
           }
