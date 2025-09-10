@@ -3,6 +3,9 @@ import { FirebaseService } from '../../../../../scraper-backend/services/firebas
 
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const country = searchParams.get('country') || 'latvia'; // Default to latvia for backward compatibility
+    
     const firebaseConfig = {
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
       privateKey: process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY || '',
@@ -12,8 +15,8 @@ export async function GET(request: NextRequest) {
 
     const firebaseService = new FirebaseService(firebaseConfig);
     
-    // Fetch all offices from all categories
-    const allOffices = await firebaseService.getAllOffices();
+    // Fetch all offices from all categories for the specified country
+    const allOffices = await firebaseService.getAllOffices(country);
     
     console.log(`Fetched ${allOffices.length} offices from Firestore`);
 

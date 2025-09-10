@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { getCitiesByCountry, getCountryById } from '../countries';
 
 interface Section3Props {
   showCompendium: boolean;
@@ -8,6 +9,7 @@ interface Section3Props {
   formatElapsedTime: (seconds: number) => string;
   progress?: any; // Add progress prop to detect when scraping finishes
   resetCompendiumState?: () => void; // Add reset function prop
+  config?: any; // Add config prop to access selected country
 }
 
 interface FirestoreOffice {
@@ -25,6 +27,7 @@ interface FirestoreOffice {
   existedInDatabase?: boolean;
   businessLabels?: string[];
   category?: string;
+  uniqueId?: string; // Added for Spanish offices (B---S format)
   timestamp?: any;
 }
 
@@ -33,7 +36,44 @@ interface CityData {
   categories: string[];
 }
 
-export default function Section3({ showCompendium, results, formatElapsedTime, progress, resetCompendiumState }: Section3Props) {
+// City ordering for both countries
+// City ordering is now handled by the centralized country configuration
+
+// Helper function to clean address display
+const cleanAddressDisplay = (address: string, city?: string): string => {
+  if (!address) return address;
+  
+  let cleanedAddress = address
+    .replace(/^[^\w\s]*/, '') // Remove non-word characters at the start
+    .replace(/^\s*[-–—•·]\s*/, '') // Remove dashes, bullets, dots at start
+    .trim();
+  
+  // Remove postal codes (5-digit codes for Spain, 4-digit codes for Latvia)
+  cleanedAddress = cleanedAddress
+    .replace(/,\s*\d{4,5}\s*,?/g, ',') // Remove postal codes like ", 08001," or ", 08001"
+    .replace(/,\s*\d{4,5}$/g, '') // Remove postal codes at the end like ", 08001"
+    .replace(/^\d{4,5}\s*,?\s*/g, '') // Remove postal codes at the start like "08001, "
+    .replace(/\s+\d{4,5}\s*,?/g, ',') // Remove postal codes with spaces like " 08001,"
+    .replace(/\s+\d{4,5}$/g, '') // Remove postal codes with spaces at the end
+    .replace(/,\s*,/g, ',') // Clean up double commas
+    .replace(/^,\s*/, '') // Remove leading comma
+    .replace(/,\s*$/, '') // Remove trailing comma
+    .trim();
+  
+  // Simplify addresses for Barcelona - remove city name and country if present
+  if (city === 'Barcelona') {
+    cleanedAddress = cleanedAddress
+      .replace(/,\s*Barcelona,?\s*Spain?/gi, '') // Remove ", Barcelona, Spain"
+      .replace(/,\s*Barcelona/gi, '') // Remove ", Barcelona"
+      .replace(/Barcelona,?\s*/gi, '') // Remove "Barcelona, " or "Barcelona "
+      .replace(/,\s*Spain?/gi, '') // Remove ", Spain"
+      .trim();
+  }
+  
+  return cleanedAddress;
+};
+
+export default function Section3({ showCompendium, results, formatElapsedTime, progress, resetCompendiumState, config }: Section3Props) {
   const [showCities, setShowCities] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
   const [showData, setShowData] = useState(false);
@@ -122,7 +162,8 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
   const fetchFirestoreData = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/firestore/data', {
+      const selectedCountry = config?.country || 'latvia';
+      const response = await fetch(`/api/firestore/data?country=${selectedCountry}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -145,16 +186,24 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
     }
   };
 
-  // Get unique cities and their categories from Firestore data
+  // Get unique cities and their categories from Firestore data, filtered by selected country
   const getCitiesAndCategories = (): CityData[] => {
     const cityMap = new Map<string, Set<string>>();
+    const selectedCountry = config?.country || 'latvia';
+    
+    // Get the cities for the selected country using centralized configuration
+    const countryCities = getCitiesByCountry(selectedCountry);
+    const cityNames = countryCities.map(city => city.name);
     
     firestoreData.forEach((office) => {
       if (office.city && office.category) {
-        if (!cityMap.has(office.city)) {
-          cityMap.set(office.city, new Set());
+        // Only include cities that are in the selected country's city list
+        if (cityNames.includes(office.city)) {
+          if (!cityMap.has(office.city)) {
+            cityMap.set(office.city, new Set());
+          }
+          cityMap.get(office.city)!.add(office.category);
         }
-        cityMap.get(office.city)!.add(office.category);
       }
     });
 
@@ -163,23 +212,10 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
       categories: Array.from(categories)
     }));
 
-    // Order cities by size (same as Section2)
-    const cityOrder = [
-      'Rīga',        // ~632,000
-      'Daugavpils',  // ~82,000
-      'Liepāja',     // ~68,000
-      'Jelgava',     // ~56,000
-      'Jūrmala',     // ~49,000
-      'Ventspils',   // ~34,000
-      'Rēzekne',     // ~27,000
-      'Valmiera',    // ~23,000
-      'Jēkabpils',   // ~22,000
-      'Cēsis'        // ~15,000
-    ];
-
+    // Sort cities by their order in the country configuration
     return citiesAndCategories.sort((a, b) => {
-      const aIndex = cityOrder.indexOf(a.city);
-      const bIndex = cityOrder.indexOf(b.city);
+      const aIndex = cityNames.indexOf(a.city);
+      const bIndex = cityNames.indexOf(b.city);
       
       // If both cities are in the order list, sort by their position
       if (aIndex !== -1 && bIndex !== -1) {
@@ -196,6 +232,13 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
   };
 
   const citiesAndCategories = getCitiesAndCategories();
+  
+  // Get the current country name for display
+  const getCountryName = () => {
+    const selectedCountry = config?.country || 'latvia';
+    const country = getCountryById(selectedCountry);
+    return country ? country.name.toUpperCase() : 'LATVIA';
+  };
 
   const handleNavigate = (direction: 'back' | 'forward') => {
     if (direction === 'back' && currentIndex > 0) {
@@ -342,7 +385,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                     backgroundColor: 'transparent'
                   }}
                 >
-                  LATVIA
+                  {getCountryName()}
                 </button>
               )}
               {showCities && !showCategories && !showData && (
@@ -355,7 +398,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                       cursor: 'pointer'
                     }}
                   >
-                    LATVIA -
+                    {getCountryName()} -
                   </button>
                   {citiesAndCategories.map((cityData) => (
                     <button
@@ -382,7 +425,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                       cursor: 'pointer'
                     }}
                   >
-                    LATVIA -
+                    {getCountryName()} -
                   </button>
                   <button
                     onClick={handleBackToCity}
@@ -421,7 +464,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                       cursor: 'pointer'
                     }}
                   >
-                    LATVIA -
+                    {getCountryName()} -
                   </button>
                   <button
                     onClick={handleBackToCity}
@@ -513,6 +556,17 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                             }`} style={{ width: '25px', textAlign: 'center' }}>
                               {countdownNumber}
                             </td>
+                            {/* Unique ID Column */}
+                            <td className={`py-0 border-r border-gray-500 ${
+                              isNewOffice ? 'text-black' : 'text-[#ffffff]'
+                            }`} style={{ width: '60px', textAlign: 'center' }}>
+                              {office.uniqueId && (
+                                <div className="text-xs font-mono text-blue-600">
+                                  {office.uniqueId}
+                                </div>
+                              )}
+                            </td>
+                            {/* Office Name Column */}
                             <td className={`py-0 border-r border-gray-500 ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`}>
@@ -530,12 +584,12 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                             <td className={`py-0 pl-[5px] border-r border-gray-500 ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`}>
-                              {office.address || '-'}
+                              {office.address ? cleanAddressDisplay(office.address, office.city) : '-'}
                             </td>
                             <td className={`py-0 pl-[5px] ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`}>
-                              {office.website || '-'}
+                              {office.website ? office.website.replace(/^https?:\/\//, '') : '-'}
                             </td>
                           </tr>
                         );

@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ScraperConfig, SearchCategory, SEARCH_CATEGORIES, CategoryConfig } from '../types';
+import { getCitiesByCountry } from '../countries';
 import Tooltip from '../components/tooltip/Tooltip';
 
 interface Section2Props {
@@ -20,18 +21,7 @@ interface Section2Props {
   resetFocusTrigger: number;
 }
 
-const LATVIAN_CITIES = [
-  'Rīga',        // ~632,000
-  'Daugavpils',  // ~82,000
-  'Liepāja',     // ~68,000
-  'Jelgava',     // ~56,000
-  'Jūrmala',     // ~49,000
-  'Ventspils',   // ~34,000
-  'Rēzekne',     // ~27,000
-  'Valmiera',    // ~23,000
-  'Jēkabpils',   // ~22,000
-  'Cēsis'        // ~15,000
-]; // Removed reverse() to show largest cities on the left
+// City lists are now handled by the centralized country configuration
 
 export default function Section2({
   config,
@@ -48,6 +38,13 @@ export default function Section2({
   onSystemClick,
   resetFocusTrigger
 }: Section2Props) {
+  // Get cities based on selected country using centralized configuration
+  const getCitiesForCountry = () => {
+    const countryId = config.country || 'latvia';
+    return getCitiesByCountry(countryId).map(city => city.name);
+  };
+  
+  const currentCities = getCitiesForCountry();
   // Create refs for all cities upfront
   const cityRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   
@@ -369,7 +366,7 @@ export default function Section2({
                 pointerEvents: isScraperFocus ? 'auto' : 'none'
               }}
             >
-              {LATVIAN_CITIES.map((city: string) => (
+              {currentCities.map((city: string) => (
                 <div key={city} className="relative">
                   <label className="flex flex-col items-center gap-1 px-2 py-1 rounded bg-opacity-80" style={{ cursor: 'default' }}>
                     <div 

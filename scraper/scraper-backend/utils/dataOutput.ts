@@ -93,7 +93,7 @@ export class DataOutput {
     console.log(`CSV data saved to: ${filePath}`);
   }
 
-  async saveToFirestore(results: SearchResult[]): Promise<void> {
+  async saveToFirestore(results: SearchResult[], country?: string): Promise<void> {
     if (!this.firebaseService) {
       console.log('No Firebase service configured - skipping Firestore save');
       return;
@@ -102,13 +102,13 @@ export class DataOutput {
     console.log('Saving results to Firestore...');
     
     for (const result of results) {
-      await this.firebaseService.saveSearchResult(result);
+      await this.firebaseService.saveSearchResult(result, undefined, country);
     }
     
     console.log('Results saved to Firestore successfully');
   }
 
-  async saveToFile(results: SearchResult[], format: 'json' | 'csv' | 'firestore', filename: string): Promise<void> {
+  async saveToFile(results: SearchResult[], format: 'json' | 'csv' | 'firestore', filename: string, country?: string): Promise<void> {
     switch (format) {
       case 'json':
         await this.saveToJson(results, filename);
@@ -117,7 +117,7 @@ export class DataOutput {
         await this.saveToCsv(results, filename);
         break;
       case 'firestore':
-        await this.saveToFirestore(results);
+        await this.saveToFirestore(results, country);
         break;
       default:
         throw new Error(`Unsupported format: ${format}`);

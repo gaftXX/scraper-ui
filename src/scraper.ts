@@ -5,6 +5,7 @@ import {
   SearchResult, 
   LatvianCity, 
   LATVIAN_CITIES, 
+  SPANISH_CITIES,
   ARCHITECTURE_SEARCH_TERMS 
 } from './types';
 
@@ -15,6 +16,9 @@ export class GoogleMapsArchitectureScraper {
   private maxBrowserReconnectAttempts = 3;
 
   constructor(config: ScraperConfig = {}) {
+    const selectedCountry = config.country ?? 'latvia';
+    const availableCities = selectedCountry === 'spain' ? SPANISH_CITIES : LATVIAN_CITIES;
+    
     this.config = {
       headless: config.headless ?? true,
       maxResults: config.maxResults ?? 50,
@@ -22,7 +26,8 @@ export class GoogleMapsArchitectureScraper {
       timeout: config.timeout ?? 45000,
       outputFormat: config.outputFormat ?? 'json',
       outputFile: config.outputFile ?? 'architecture_offices',
-      cities: config.cities ?? LATVIAN_CITIES.map(city => city.name),
+      cities: config.cities ?? availableCities.map(city => city.name),
+      country: selectedCountry,
       searchRadius: config.searchRadius ?? 10,
       humanBehavior: config.humanBehavior ?? true,
       stealthMode: config.stealthMode ?? true,

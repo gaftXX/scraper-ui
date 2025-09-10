@@ -3,13 +3,18 @@ import {
   ArchitectureOffice, 
   ScraperConfig, 
   SearchResult, 
-  LatvianCity, 
-  LATVIAN_CITIES, 
+  City, 
   ARCHITECTURE_SEARCH_TERMS,
   getSearchTermsForCategories,
   SearchCategory,
   SEARCH_CATEGORIES
 } from './types';
+import { 
+  getCityByCountryAndName,
+  getCitiesByCountry,
+  getDefaultCityByCountry
+} from './countries';
+import { UniqueIdGenerator } from './uniqueIdGenerator';
 
 export class GoogleMapsArchitectureScraper {
   private browser: Browser | null = null;
@@ -18,6 +23,10 @@ export class GoogleMapsArchitectureScraper {
   private maxBrowserReconnectAttempts = 3;
 
   constructor(config: ScraperConfig = {}) {
+    const selectedCountry = config.country ?? 'latvia';
+    const availableCities = getCitiesByCountry(selectedCountry);
+    const defaultCity = getDefaultCityByCountry(selectedCountry);
+    
     this.config = {
       headless: config.headless ?? true,
       maxResults: config.maxResults ?? 200, // Increased from 50 to handle more results from enhanced scrolling
@@ -25,7 +34,8 @@ export class GoogleMapsArchitectureScraper {
       timeout: config.timeout ?? 45000,
       outputFormat: config.outputFormat ?? 'json',
       outputFile: config.outputFile ?? 'architecture_offices',
-      cities: config.cities ?? LATVIAN_CITIES.map(city => city.name),
+      cities: config.cities ?? (defaultCity ? [defaultCity] : availableCities.map(city => city.name)),
+      country: selectedCountry,
       searchRadius: config.searchRadius ?? 10,
       humanBehavior: config.humanBehavior ?? true,
       stealthMode: config.stealthMode ?? true,
@@ -33,8 +43,84 @@ export class GoogleMapsArchitectureScraper {
     };
   }
 
+  /**
+   * Calculate intensity level based on maxResults and searchRadius
+   */
+  private getIntensityLevel(): number {
+    const { maxResults = 20, searchRadius = 10 } = this.config;
+    
+    if (maxResults === 20 && searchRadius === 10) return 1;
+    if (maxResults === 30 && searchRadius === 20) return 2;
+    if (maxResults === 40 && searchRadius === 30) return 3;
+    if (maxResults === 50 && searchRadius === 40) return 4;
+    if (maxResults === 70 && searchRadius === 50) return 5;
+    
+    // Default to level 2 if no exact match
+    return 2;
+  }
+
+  /**
+   * Get max scroll attempts based on intensity level
+   */
+  private getMaxScrollAttempts(): number {
+    const intensityLevel = this.getIntensityLevel();
+    // Level 1 = 3 scrolls, each level adds 1 more scroll
+    return 2 + intensityLevel; // 3, 4, 5, 6, 7
+  }
+
+  /**
+   * Clean address text by removing unwanted symbols and characters
+   */
+  private cleanAddress(address: string): string {
+    if (!address) return address;
+    
+    // Remove common unwanted symbols that appear before addresses
+    return address
+      .replace(/^[^\w\s]*/, '') // Remove non-word characters at the start
+      .replace(/^\s*[-–—•·]\s*/, '') // Remove dashes, bullets, dots at start
+      .replace(/^\s*[^\p{L}\p{N}]*/, '') // Remove non-letter/number characters at start
+      .trim();
+  }
+
+  /**
+   * Load existing unique IDs from database to prevent collisions
+   */
+  async loadExistingUniqueIds(): Promise<void> {
+    if (this.config.country !== 'spain') {
+      return; // Only load IDs for Spanish offices
+    }
+
+    try {
+      console.log('Loading existing unique IDs from database...');
+      
+      // Import Firebase service dynamically to avoid circular dependencies
+      const { FirebaseService } = await import('./services/firebaseService');
+      
+      if (this.config.firebaseConfig) {
+        const firebaseService = new FirebaseService(this.config.firebaseConfig);
+        
+        // Get all existing Spanish offices
+        const existingOffices = await firebaseService.getAllOffices('spain');
+        
+        // Load existing IDs into the generator
+        await UniqueIdGenerator.loadExistingIds(existingOffices);
+        
+        console.log(`Loaded ${existingOffices.filter(o => o.uniqueId).length} existing unique IDs from Spanish offices`);
+      } else {
+        console.log('No Firebase config available, unique ID generator ready for Spanish offices');
+      }
+      
+    } catch (error) {
+      console.error('Error loading existing unique IDs:', error);
+      console.log('Continuing with unique ID generator ready for Spanish offices');
+    }
+  }
+
   async initialize(): Promise<void> {
     console.log('Initializing Google Maps scraper...');
+    
+    // Load existing unique IDs to prevent collisions
+    await this.loadExistingUniqueIds();
     
     try {
       // Much simpler browser launch for macOS
@@ -151,23 +237,23 @@ export class GoogleMapsArchitectureScraper {
   ): Promise<SearchResult> {
     await this.ensureBrowserConnection();
 
-    const latvianCity = LATVIAN_CITIES.find(c => 
-      c.name === city || c.nameEn === city
-    );
+    // Get city information using the centralized country configuration
+    const selectedCountry = this.config.country || 'latvia';
+    const targetCity = getCityByCountryAndName(selectedCountry, city);
 
-    if (!latvianCity) {
-      throw new Error(`City "${city}" not found in Latvia cities list.`);
+    if (!targetCity) {
+      throw new Error(`City "${city}" not found in ${selectedCountry} cities list.`);
     }
 
-    console.log(`Searching for ${category} offices in ${latvianCity.name}...`);
+    console.log(`Searching for ${category} offices in ${targetCity.name}...`);
 
     const allOffices: ArchitectureOffice[] = [];
     
     // Get search terms for the specified category
-    // For architecture-only, construction, interior-design, and property-development: only use single focused term to match Google Maps business labeling
-    // For other categories: use multiple terms
-    const searchTermCount = (category === 'architecture-only' || category === 'construction' || category === 'interior-design' || category === 'property-development') ? 1 : 4;
-    const searchTerms = getSearchTermsForCategories([category], true, searchTermCount);
+    // Always use only one randomly selected search term
+    console.log(`City: ${targetCity.name}, Country: ${selectedCountry}`);
+    
+    const searchTerms = getSearchTermsForCategories([category], true, 1, selectedCountry);
     
     console.log(`Using ${searchTerms.length} search term(s) for ${category} category:`);
     searchTerms.forEach((term, index) => {
@@ -177,7 +263,7 @@ export class GoogleMapsArchitectureScraper {
     // Search with the selected terms
     for (const searchTerm of searchTerms) {
       try {
-        const offices = await this.searchWithTermRetry(latvianCity, searchTerm, 3, category);
+        const offices = await this.searchWithTermRetry(targetCity, searchTerm, 3, category);
         // Add category info to each office
         const categorizedOffices = offices.map(office => ({ ...office, category }));
         allOffices.push(...categorizedOffices);
@@ -185,7 +271,7 @@ export class GoogleMapsArchitectureScraper {
         // Add randomized delay between searches
         await this.randomDelay(this.config.delayBetweenRequests!, 1000);
       } catch (error) {
-        console.error(`Failed to search for "${searchTerm}" in ${latvianCity.name} after retries:`, error);
+        console.error(`Failed to search for "${searchTerm}" in ${targetCity.name} after retries:`, error);
         
         // Check if it's a connection error and try to reconnect
         if (this.isConnectionError(error)) {
@@ -193,7 +279,7 @@ export class GoogleMapsArchitectureScraper {
           try {
             await this.ensureBrowserConnection();
             // Retry the search term once after reconnection
-            const offices = await this.searchWithTermRetry(latvianCity, searchTerm, 1, category);
+            const offices = await this.searchWithTermRetry(targetCity, searchTerm, 1, category);
             const categorizedOffices = offices.map(office => ({ ...office, category }));
             allOffices.push(...categorizedOffices);
           } catch (reconnectError) {
@@ -211,7 +297,7 @@ export class GoogleMapsArchitectureScraper {
       totalFound: uniqueOffices.length,
       searchQuery: searchTerms.join(', '),
       category,
-      city: latvianCity.name,
+      city: targetCity.name,
       timestamp: new Date().toISOString()
     };
   }
@@ -226,7 +312,7 @@ export class GoogleMapsArchitectureScraper {
            errorMessage.includes('Connection closed');
   }
 
-  private async searchWithTermRetry(city: LatvianCity, searchTerm: string, maxRetries: number = 3, category: SearchCategory = 'architecture-only'): Promise<ArchitectureOffice[]> {
+  private async searchWithTermRetry(city: City, searchTerm: string, maxRetries: number = 3, category: SearchCategory = 'architecture-only'): Promise<ArchitectureOffice[]> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`   Searching: "${searchTerm}" (attempt ${attempt}/${maxRetries})`);
@@ -257,7 +343,7 @@ export class GoogleMapsArchitectureScraper {
     return [];
   }
 
-  private async searchWithTerm(city: LatvianCity, searchTerm: string, category: SearchCategory = 'architecture-only'): Promise<ArchitectureOffice[]> {
+  private async searchWithTerm(city: City, searchTerm: string, category: SearchCategory = 'architecture-only'): Promise<ArchitectureOffice[]> {
     let page: Page | null = null;
     
     try {
@@ -345,7 +431,7 @@ export class GoogleMapsArchitectureScraper {
       }
 
       // Extract office data
-      const offices = await this.extractOfficeData(page, category);
+      const offices = await this.extractOfficeData(page, category, city.name);
       return offices;
 
     } catch (error) {
@@ -427,7 +513,7 @@ export class GoogleMapsArchitectureScraper {
     });
   }
 
-  private async extractOfficeData(page: Page, category: SearchCategory = 'architecture-only'): Promise<ArchitectureOffice[]> {
+  private async extractOfficeData(page: Page, category: SearchCategory = 'architecture-only', cityName?: string): Promise<ArchitectureOffice[]> {
     const offices: ArchitectureOffice[] = [];
 
     try {
@@ -579,7 +665,7 @@ export class GoogleMapsArchitectureScraper {
               // If not a duplicate, mark as seen and proceed with full extraction
               seenOffices.add(officeKey);
               
-              const office = await this.extractOfficeDetails(page, category);
+              const office = await this.extractOfficeDetails(page, category, cityName);
               if (office) {
                 console.log(`Extracted: ${office.name} - ${office.address}`);
                 offices.push(office);
@@ -684,7 +770,7 @@ export class GoogleMapsArchitectureScraper {
             for (const element of elements) {
               const text = await element.evaluate(el => el?.textContent?.trim() || '');
               if (text && (text.includes('iela') || text.includes('Rīga') || text.includes('LV-'))) {
-                address = text;
+                address = this.cleanAddress(text); // Clean unwanted symbols
                 break;
               }
             }
@@ -692,6 +778,7 @@ export class GoogleMapsArchitectureScraper {
             address = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           }
           if (address) {
+            address = this.cleanAddress(address); // Clean unwanted symbols
             break;
           }
         } catch {
@@ -730,7 +817,7 @@ export class GoogleMapsArchitectureScraper {
     }
   }
 
-  private async extractOfficeDetails(page: Page, category: SearchCategory = 'architecture-only'): Promise<ArchitectureOffice | null> {
+  private async extractOfficeDetails(page: Page, category: SearchCategory = 'architecture-only', cityName?: string): Promise<ArchitectureOffice | null> {
     try {
       // Wait for the sidebar to load with multiple possible selectors
       const sidebarSelectors = [
@@ -857,6 +944,7 @@ export class GoogleMapsArchitectureScraper {
         try {
           address = await page.$eval(selector, (el: Element) => el?.textContent?.trim() || '');
           if (address) {
+            address = this.cleanAddress(address); // Clean unwanted symbols
             console.log(`Found address with selector: ${selector}`);
             break;
           }
@@ -1096,6 +1184,18 @@ export class GoogleMapsArchitectureScraper {
         return null;
       }
 
+      // Generate unique ID for Spanish offices
+      let uniqueId: string | undefined;
+      if (this.config.country === 'spain') {
+        try {
+          uniqueId = UniqueIdGenerator.generateId();
+          console.log(`Generated unique ID for Spanish office: ${uniqueId}`);
+        } catch (error) {
+          console.error('Failed to generate unique ID:', error);
+          // Continue without unique ID rather than failing the entire extraction
+        }
+      }
+
       const office: ArchitectureOffice = {
         name,
         address,
@@ -1105,7 +1205,8 @@ export class GoogleMapsArchitectureScraper {
         reviews,
         hours: hours || undefined,
         description: description || undefined,
-        businessLabels: businessLabels // Add business labels to the office data
+        businessLabels: businessLabels, // Add business labels to the office data
+        uniqueId: uniqueId // Add unique ID for Spanish offices
       };
 
       console.log(`Extracted office: ${name} | ${address} | ${phone} | ${website} | Labels: ${businessLabels.join(', ')}`);
@@ -1221,6 +1322,7 @@ export class GoogleMapsArchitectureScraper {
   private async validateArchitectureFirm(businessLabels: string[]): Promise<boolean> {
     // Only accept businesses with these architecture-related labels (anything else is rejected)
     const acceptedArchitectureLabels = [
+      // English terms
       'architect',
       'architecture firm',
       'architectural firm', 
@@ -1229,8 +1331,16 @@ export class GoogleMapsArchitectureScraper {
       'architecture office',
       'architecture studio',
       'architectural services',
+      // Latvian terms
       'arhitekts',
-      'arhitektūra'
+      'arhitektūra',
+      // Spanish terms
+      'arquitecto',
+      'arquitectura',
+      'estudio de arquitectura',
+      'estudio arquitectura',
+      'arquitecto técnico',
+      'estudio de arquitectos'
     ];
     
     if (businessLabels.length === 0) {
@@ -1392,7 +1502,9 @@ export class GoogleMapsArchitectureScraper {
       let previousResultCount = 0;
       let currentResultCount = 0;
       let scrollAttempts = 0;
-      const maxScrollAttempts = 5; // Reduced from 10 to 5 per user request
+      const maxScrollAttempts = this.getMaxScrollAttempts(); // Dynamic based on intensity level
+      const intensityLevel = this.getIntensityLevel();
+      console.log(`Starting enhanced scrolling with intensity level ${intensityLevel} (max ${maxScrollAttempts} scrolls)`);
       let noNewResultsCount = 0;
       const maxNoNewResults = 10; // ✅ FIXED: Increased from 3 to 10 - less aggressive circuit breaker
       let consecutiveFailures = 0;
@@ -1950,6 +2062,11 @@ export class GoogleMapsArchitectureScraper {
         
       } catch (error) {
         console.error(`Error scraping ${cityName}:`, error);
+        console.error(`Error details:`, {
+          name: error?.name,
+          message: error?.message,
+          stack: error?.stack
+        });
         
         // If it's a connection error, try to recover and continue
         if (this.isConnectionError(error)) {

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { ScraperConfig, SearchCategory, SEARCH_CATEGORIES, getSearchTermsForCategories } from './types';
+import { getDefaultCityByCountry, getCitiesByCountry } from './countries';
 import Section1 from './sections/Section1';
 import Section2 from './sections/Section2';
 import Section3 from './sections/Section3';
@@ -33,10 +34,7 @@ interface ScrapingResults {
   summary: string;
 }
 
-const LATVIAN_CITIES = [
-  'Rīga', 'Daugavpils', 'Liepāja', 'Jelgava', 'Jūrmala', 
-  'Ventspils', 'Rēzekne', 'Valmiera', 'Jēkabpils', 'Cēsis'
-];
+// City lists are now handled by the centralized country configuration
 
 export default function ScraperInterface() {
   const [config, setConfig] = useState<ScraperConfig>({
@@ -45,7 +43,8 @@ export default function ScraperInterface() {
     delayBetweenRequests: 0,
     timeout: 45000,
     outputFormat: 'firestore',
-    cities: ['Rīga'],
+    cities: [getDefaultCityByCountry('spain')], // Use default city for Spain
+    country: 'spain', // Default to Spain
     searchRadius: 10, // Set to level 1 value
     humanBehavior: true,
     stealthMode: true,
@@ -226,6 +225,25 @@ export default function ScraperInterface() {
             : (prev.searchCategories || []).filter((c: SearchCategory) => c !== categoryId)
         };
         console.log('=== DEBUG: New config after category change ===');
+        console.log('New config:', newConfig);
+        console.log('===============================================');
+        return newConfig;
+      });
+    });
+  };
+
+  const handleCountryChange = (country: 'latvia' | 'spain') => {
+    console.log(`=== DEBUG: handleCountryChange called with country: ${country} ===`);
+    
+    flushSync(() => {
+      setConfig((prev: ScraperConfig) => {
+        const defaultCity = getDefaultCityByCountry(country);
+        const newConfig = {
+          ...prev,
+          country: country,
+          cities: defaultCity ? [defaultCity] : [] // Set default city for the country
+        };
+        console.log('=== DEBUG: New config after country change ===');
         console.log('New config:', newConfig);
         console.log('===============================================');
         return newConfig;
@@ -612,6 +630,7 @@ export default function ScraperInterface() {
             toggleAutoScroll={toggleAutoScroll}
             showSystem={showSystem}
             resetSystemState={resetSystemState}
+            handleCountryChange={handleCountryChange}
           />
         </div>
 
@@ -642,6 +661,7 @@ export default function ScraperInterface() {
             formatElapsedTime={formatElapsedTime}
             progress={progress}
             resetCompendiumState={resetCompendiumState}
+            config={config}
           />
         </div>
       </div>

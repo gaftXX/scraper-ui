@@ -13,7 +13,10 @@ export interface ArchitectureOffice {
   city?: string; // Added to track which city the office belongs to
   existedInDatabase?: boolean; // Added to track if office was already in database
   businessLabels?: string[]; // Added to track Google Maps business labels for validation
+  uniqueId?: string; // Added for Spanish offices (B---S format)
 }
+
+export type Country = 'latvia' | 'spain';
 
 export interface ScraperConfig {
   headless?: boolean;
@@ -23,6 +26,7 @@ export interface ScraperConfig {
   outputFormat?: 'json' | 'csv' | 'firestore';
   outputFile?: string;
   cities?: string[];
+  country?: Country; // Selected country
   searchRadius?: number;
   humanBehavior?: boolean;
   stealthMode?: boolean;
@@ -47,6 +51,38 @@ export interface CategoryConfig {
   priority: 'high' | 'medium' | 'low';
 }
 
+// **COUNTRY-SPECIFIC SEARCH TERMS**
+const LATVIAN_ARCHITECTURE_TERMS = [
+  "architecture firm",
+  "architect",
+  "architecture office"
+];
+
+const SPANISH_ARCHITECTURE_TERMS = [
+  "estudio de arquitectura",
+  "arquitecto",
+  "arquitectura",
+  "estudio arquitectura",
+  "arquitecto barcelona",
+  "estudio arquitectura barcelona"
+];
+
+// **GET COUNTRY-SPECIFIC SEARCH TERMS**
+export function getCountrySpecificSearchTerms(categoryId: SearchCategory, country: string): string[] {
+  if (categoryId === 'architecture-only') {
+    if (country === 'spain') {
+      return SPANISH_ARCHITECTURE_TERMS;
+    } else {
+      // Default to Latvia (English terms)
+      return LATVIAN_ARCHITECTURE_TERMS;
+    }
+  }
+  
+  // For other categories, use the default terms from SEARCH_CATEGORIES
+  const category = SEARCH_CATEGORIES.find(c => c.id === categoryId);
+  return category ? category.terms : [];
+}
+
 // **CATEGORIZED SEARCH TERMS**
 export const SEARCH_CATEGORIES: CategoryConfig[] = [
   {
@@ -55,7 +91,7 @@ export const SEARCH_CATEGORIES: CategoryConfig[] = [
     description: 'Architecture firms and studios only',
     priority: 'high',
     terms: [
-      // Only use "architecture firm" to match Google Maps business labeling
+      // Default to English terms (will be overridden by country-specific function)
       "architecture firm"
     ]
   },
@@ -91,11 +127,12 @@ export const SEARCH_CATEGORIES: CategoryConfig[] = [
   }
 ];
 
-// **GENERATE SEARCH TERMS BASED ON SELECTED CATEGORIES**
+// **GENERATE SEARCH TERMS BASED ON SELECTED CATEGORIES AND COUNTRY**
 export function getSearchTermsForCategories(
   categories: SearchCategory[],
   useRandomSelection: boolean = false,
-  randomCount: number = 1
+  randomCount: number = 1,
+  country: string = 'latvia'
 ): string[] {
   if (!categories || categories.length === 0) {
     // Default to architecture-only if no categories selected
@@ -105,14 +142,17 @@ export function getSearchTermsForCategories(
   const terms: string[] = [];
   
   categories.forEach(categoryId => {
-    const category = SEARCH_CATEGORIES.find(c => c.id === categoryId);
-    if (category) {
+    // Get country-specific terms
+    const countrySpecificTerms = getCountrySpecificSearchTerms(categoryId, country);
+    
+    if (countrySpecificTerms.length > 0) {
       if (useRandomSelection) {
         // **SPECIAL HANDLING FOR FOCUSED CATEGORIES**
         if (categoryId === 'architecture-only') {
-          // Only use "architecture firm" as it matches Google Maps business labeling
-          const singleTerm = "architecture firm";
-          terms.push(singleTerm);
+          // Use country-specific architecture terms
+          const shuffled = [...countrySpecificTerms].sort(() => 0.5 - Math.random());
+          const selectedTerm = shuffled[0];
+          terms.push(selectedTerm);
         } else if (categoryId === 'construction') {
           // Only use "construction company" as it matches Google Maps business labeling
           const singleTerm = "construction company";
@@ -127,15 +167,17 @@ export function getSearchTermsForCategories(
           terms.push(singleTerm);
         } else {
           // **REGULAR RANDOM SELECTION FOR OTHER CATEGORIES**
-          const shuffled = [...category.terms].sort(() => 0.5 - Math.random());
-          const selectedTerms = shuffled.slice(0, Math.min(randomCount, category.terms.length));
+          const shuffled = [...countrySpecificTerms].sort(() => 0.5 - Math.random());
+          const selectedTerms = shuffled.slice(0, Math.min(randomCount, countrySpecificTerms.length));
           terms.push(...selectedTerms);
         }
       } else {
         // **USE ALL TERMS**
         if (categoryId === 'architecture-only') {
-          // Even when not using random selection, only use "architecture firm"
-          terms.push("architecture firm");
+          // Use country-specific architecture terms
+          const shuffled = [...countrySpecificTerms].sort(() => 0.5 - Math.random());
+          const selectedTerm = shuffled[0];
+          terms.push(selectedTerm);
         } else if (categoryId === 'construction') {
           // Even when not using random selection, only use "construction company"
           terms.push("construction company");
@@ -146,7 +188,7 @@ export function getSearchTermsForCategories(
           // Even when not using random selection, only use "property developer"
           terms.push("property developer");
         } else {
-          terms.push(...category.terms);
+          terms.push(...countrySpecificTerms);
         }
       }
     }
@@ -179,11 +221,14 @@ export interface SearchResult {
   timestamp: string;
 }
 
-export interface LatvianCity {
+export interface City {
   name: string;
   nameEn: string;
   searchTerms: string[];
-} 
+}
+
+// Legacy alias for backward compatibility
+export type LatvianCity = City; 
 
 interface ScrapingResults {
   totalOffices: number;

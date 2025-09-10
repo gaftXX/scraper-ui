@@ -246,7 +246,7 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
         // Mark all offices with their existence status in the database
         for (const result of results) {
           if (result.offices && result.offices.length > 0) {
-            result.offices = await firebaseService.markOfficesExistenceInDatabase(result.offices);
+            result.offices = await firebaseService.markOfficesExistenceInDatabase(result.offices, config.country);
           }
         }
         console.log('Database existence check completed');
@@ -297,7 +297,7 @@ async function runScraper(config: ScraperConfig, controller: ReadableStreamDefau
     
     try {
       if (firebaseService) {
-        await dataOutput.saveToFirestore(results);
+        await dataOutput.saveToFirestore(results, config.country);
         console.log('Results successfully saved to Firebase with duplicate checking');
 
         // Save timing data

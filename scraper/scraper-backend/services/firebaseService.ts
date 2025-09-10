@@ -136,9 +136,9 @@ export class FirebaseService {
   }
 
   /**
-   * Save a single search result to Firestore with proper hierarchy: latvia > city > category > office
+   * Save a single search result to Firestore with proper hierarchy: country > city > category > office
    */
-  async saveSearchResult(result: SearchResult, category?: string): Promise<void> {
+  async saveSearchResult(result: SearchResult, category?: string, country?: string): Promise<void> {
     if (!this.initialized) {
       throw new Error('Firebase not initialized');
     }
@@ -147,8 +147,9 @@ export class FirebaseService {
       // Determine category name - prioritize explicit parameter, then result.category, then parse from search query
       const categoryName = category || result.category || this.getCollectionName(result.searchQuery);
       
-      // Use latvia as main collection, city as document, category as subcollection
-      const cityDocRef = this.db.collection('latvia').doc(result.city);
+      // Use country as main collection, city as document, category as subcollection
+      const countryCollection = country || 'latvia'; // Default to latvia for backward compatibility
+      const cityDocRef = this.db.collection(countryCollection).doc(result.city);
       
       // Save city metadata
       await cityDocRef.set({
@@ -207,8 +208,7 @@ export class FirebaseService {
           if (office.description) cleanOfficeData.description = office.description;
 
           if (office.placeId) cleanOfficeData.placeId = office.placeId;
-          
-
+          if (office.uniqueId) cleanOfficeData.uniqueId = office.uniqueId;
 
           batch.set(officeRef, cleanOfficeData);
         });
@@ -225,11 +225,11 @@ export class FirebaseService {
   /**
    * Check for duplicate offices based on name and address
    */
-  private async findDuplicateOffices(offices: ArchitectureOffice[]): Promise<ArchitectureOffice[]> {
+  private async findDuplicateOffices(offices: ArchitectureOffice[], country?: string): Promise<ArchitectureOffice[]> {
     console.log(`Checking ${offices.length} offices for duplicates...`);
     
     try {
-      const existingOffices = await this.getAllOffices();
+      const existingOffices = await this.getAllOffices(country);
       const newOffices: ArchitectureOffice[] = [];
       let duplicatesFound = 0;
 
@@ -270,11 +270,11 @@ export class FirebaseService {
   /**
    * Check for duplicate offices within a specific category
    */
-  private async findDuplicateOfficesInCategory(offices: ArchitectureOffice[], category: string): Promise<ArchitectureOffice[]> {
+  private async findDuplicateOfficesInCategory(offices: ArchitectureOffice[], category: string, country?: string): Promise<ArchitectureOffice[]> {
     console.log(`Checking ${offices.length} offices for duplicates in ${category} category...`);
     
     try {
-      const existingOffices = await this.getAllOfficesInCategory(category);
+      const existingOffices = await this.getAllOfficesInCategory(category, country);
       const newOffices: ArchitectureOffice[] = [];
       let duplicatesFound = 0;
 
@@ -315,11 +315,11 @@ export class FirebaseService {
   /**
    * Mark offices as existing or new in database
    */
-  async markOfficesExistenceInDatabase(offices: ArchitectureOffice[]): Promise<ArchitectureOffice[]> {
+  async markOfficesExistenceInDatabase(offices: ArchitectureOffice[], country?: string): Promise<ArchitectureOffice[]> {
     console.log(`Checking ${offices.length} offices against database...`);
     
     try {
-      const existingOffices = await this.getAllOffices();
+      const existingOffices = await this.getAllOffices(country);
       const markedOffices: ArchitectureOffice[] = [];
 
       for (const office of offices) {
@@ -353,7 +353,7 @@ export class FirebaseService {
   /**
    * Save multiple search results to Firestore with duplicate checking and category separation
    */
-  async saveSearchResults(results: SearchResult[]): Promise<void> {
+  async saveSearchResults(results: SearchResult[], country?: string): Promise<void> {
     if (!this.initialized) {
       throw new Error('Firebase not initialized');
     }
@@ -390,7 +390,7 @@ export class FirebaseService {
       console.log(`Total offices in ${category}: ${allOffices.length}`);
 
       // Check for duplicates within this category
-      const newOffices = await this.findDuplicateOfficesInCategory(allOffices, category);
+      const newOffices = await this.findDuplicateOfficesInCategory(allOffices, category, country);
       
       if (newOffices.length === 0) {
         console.log(`No new offices to save in ${category} (all were duplicates)`);
@@ -419,7 +419,7 @@ export class FirebaseService {
 
       // Save only new offices for this category
       for (const result of newResults) {
-        await this.saveSearchResult(result, category);
+        await this.saveSearchResult(result, category, country);
       }
       
       totalNewOffices += newOffices.length;
@@ -522,7 +522,7 @@ export class FirebaseService {
   /**
    * Get all architecture offices from Firestore (all categories and cities)
    */
-  async getAllOffices(): Promise<ArchitectureOffice[]> {
+  async getAllOffices(country?: string): Promise<ArchitectureOffice[]> {
     if (!this.initialized) {
       throw new Error('Firebase not initialized');
     }
@@ -530,10 +530,11 @@ export class FirebaseService {
     try {
       const offices: ArchitectureOffice[] = [];
       
-      // Get all city documents from latvia collection
-      const latviaSnapshot = await this.db.collection('latvia').get();
+      // Get all city documents from specified country collection (default to latvia)
+      const countryCollection = country || 'latvia';
+      const countrySnapshot = await this.db.collection(countryCollection).get();
       
-      for (const cityDoc of latviaSnapshot.docs) {
+      for (const cityDoc of countrySnapshot.docs) {
         const cityName = cityDoc.id;
         
         // Get all category subcollections for this city
@@ -558,7 +559,8 @@ export class FirebaseService {
                 description: data.description,
                 placeId: data.placeId,
                 city: cityName,
-                category: data.category || categoryCollection.id
+                category: data.category || categoryCollection.id,
+                uniqueId: data.uniqueId
               });
             }
           });
@@ -575,7 +577,7 @@ export class FirebaseService {
   /**
    * Get all architecture offices from a specific category across all cities
    */
-  async getAllOfficesInCategory(category: string): Promise<ArchitectureOffice[]> {
+  async getAllOfficesInCategory(category: string, country?: string): Promise<ArchitectureOffice[]> {
     if (!this.initialized) {
       throw new Error('Firebase not initialized');
     }
@@ -583,10 +585,11 @@ export class FirebaseService {
     try {
       const offices: ArchitectureOffice[] = [];
       
-      // Get all city documents from latvia collection
-      const latviaSnapshot = await this.db.collection('latvia').get();
+      // Get all city documents from specified country collection (default to latvia)
+      const countryCollection = country || 'latvia';
+      const countrySnapshot = await this.db.collection(countryCollection).get();
       
-      for (const cityDoc of latviaSnapshot.docs) {
+      for (const cityDoc of countrySnapshot.docs) {
         const cityName = cityDoc.id;
         
         // Get the specific category subcollection for this city
@@ -608,7 +611,8 @@ export class FirebaseService {
               description: data.description,
               placeId: data.placeId,
               city: cityName,
-              category: category
+              category: category,
+              uniqueId: data.uniqueId
             });
           }
         });
@@ -624,7 +628,7 @@ export class FirebaseService {
   /**
    * Get offices by city from Firestore (all categories)
    */
-  async getOfficesByCity(city: string): Promise<ArchitectureOffice[]> {
+  async getOfficesByCity(city: string, country?: string): Promise<ArchitectureOffice[]> {
     if (!this.initialized) {
       throw new Error('Firebase not initialized');
     }
@@ -632,8 +636,9 @@ export class FirebaseService {
     try {
       const offices: ArchitectureOffice[] = [];
       
-      // Get the specific city document from latvia collection
-      const cityDocRef = this.db.collection('latvia').doc(city);
+      // Get the specific city document from specified country collection (default to latvia)
+      const countryCollection = country || 'latvia';
+      const cityDocRef = this.db.collection(countryCollection).doc(city);
       const cityDoc = await cityDocRef.get();
       
       if (cityDoc.exists) {
@@ -659,7 +664,8 @@ export class FirebaseService {
                 description: data.description,
                 placeId: data.placeId,
                 city: city,
-                category: data.category || categoryCollection.id
+                category: data.category || categoryCollection.id,
+                uniqueId: data.uniqueId
               });
             }
           });
@@ -676,7 +682,7 @@ export class FirebaseService {
   /**
    * Get offices by city and category from Firestore
    */
-  async getOfficesByCityAndCategory(city: string, category: string): Promise<ArchitectureOffice[]> {
+  async getOfficesByCityAndCategory(city: string, category: string, country?: string): Promise<ArchitectureOffice[]> {
     if (!this.initialized) {
       throw new Error('Firebase not initialized');
     }
@@ -684,8 +690,9 @@ export class FirebaseService {
     try {
       const offices: ArchitectureOffice[] = [];
       
-      // Get the specific city document from latvia collection
-      const cityDocRef = this.db.collection('latvia').doc(city);
+      // Get the specific city document from specified country collection (default to latvia)
+      const countryCollection = country || 'latvia';
+      const cityDocRef = this.db.collection(countryCollection).doc(city);
       const cityDoc = await cityDocRef.get();
       
       if (cityDoc.exists) {
@@ -708,7 +715,8 @@ export class FirebaseService {
               description: data.description,
               placeId: data.placeId,
               city: city,
-              category: category
+              category: category,
+              uniqueId: data.uniqueId
             });
           }
         });
@@ -726,18 +734,19 @@ export class FirebaseService {
   /**
    * Delete all data from Firestore (use with caution!)
    */
-  async clearAllData(): Promise<void> {
+  async clearAllData(country?: string): Promise<void> {
     if (!this.initialized) {
       throw new Error('Firebase not initialized');
     }
 
-    console.log('Clearing all data from Firestore...');
+    const countryCollection = country || 'latvia';
+    console.log(`Clearing all data from ${countryCollection} collection in Firestore...`);
     
     try {
-      // Delete all cities and their subcollections from latvia collection
-      const latviaSnapshot = await this.db.collection('latvia').get();
+      // Delete all cities and their subcollections from specified country collection
+      const countrySnapshot = await this.db.collection(countryCollection).get();
       
-      for (const cityDoc of latviaSnapshot.docs) {
+      for (const cityDoc of countrySnapshot.docs) {
         console.log(`Clearing ${cityDoc.id} city data...`);
         
         // Get all category subcollections for this city

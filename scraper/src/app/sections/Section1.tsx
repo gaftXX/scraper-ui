@@ -43,6 +43,7 @@ interface Section1Props {
   toggleAutoScroll: () => void;
   showSystem: boolean;
   resetSystemState: () => void;
+  handleCountryChange?: (country: 'latvia' | 'spain') => void;
 }
 
 export default function Section1({
@@ -58,7 +59,8 @@ export default function Section1({
   autoScroll,
   toggleAutoScroll,
   showSystem,
-  resetSystemState
+  resetSystemState,
+  handleCountryChange
 }: Section1Props) {
   return (
     <div className="col-span-2 h-screen">
@@ -75,8 +77,34 @@ export default function Section1({
                 CLOSE
               </button>
             </div>
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-[#ffffff] opacity-50">
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <div className="text-center text-[#ffffff] mb-6">
+                <h3 className="text-md font-medium mb-4">Country Selection</h3>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => handleCountryChange?.('latvia')}
+                    className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                      config.country === 'latvia'
+                        ? 'bg-[#4a90e2] text-white'
+                        : 'bg-[#393837] text-[#ffffff] hover:bg-[#4a4a4a]'
+                    }`}
+                  >
+                    Latvia
+                  </button>
+                  <button
+                    onClick={() => handleCountryChange?.('spain')}
+                    className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                      config.country === 'spain' || !config.country
+                        ? 'bg-[#4a90e2] text-white'
+                        : 'bg-[#393837] text-[#ffffff] hover:bg-[#4a4a4a]'
+                    }`}
+                  >
+                    Spain
+                  </button>
+                </div>
+                <p className="text-xs text-[#ffffff] opacity-70 mt-2">
+                  Select a country to change available cities
+                </p>
               </div>
             </div>
           </div>
@@ -205,7 +233,7 @@ export default function Section1({
                                           {office.address || 'No address available'}
                                         </td>
                                         <td className="py-0 pl-[5px] text-[#ffffff] border-r border-gray-500">
-                                          {office.website || '-'}
+                                          {office.website ? office.website.replace(/^https?:\/\//, '') : '-'}
                                         </td>
                                         <td className="py-0 pl-[5px] text-[#ffffff]">
                                           {office.existedInDatabase ? (
