@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { InlookState } from '../inlookTypes';
 
 interface ScrapingProgress {
   currentCity: string;
@@ -44,6 +45,9 @@ interface Section1Props {
   showSystem: boolean;
   resetSystemState: () => void;
   handleCountryChange?: (country: 'latvia' | 'spain') => void;
+  inlookState: InlookState;
+  showInlook: boolean;
+  resetInlookState: () => void;
 }
 
 export default function Section1({
@@ -60,12 +64,327 @@ export default function Section1({
   toggleAutoScroll,
   showSystem,
   resetSystemState,
-  handleCountryChange
+  handleCountryChange,
+  inlookState,
+  showInlook,
+  resetInlookState
 }: Section1Props) {
   return (
     <div className="col-span-2 h-screen">
-      <div className="h-full flex flex-col p-2">
-        {showSystem ? (
+      <style jsx global>{`
+        div::-webkit-scrollbar {
+          width: 8px;
+        }
+        div::-webkit-scrollbar-track {
+          background: #2d3748;
+          border-radius: 4px;
+        }
+        div::-webkit-scrollbar-thumb {
+          background: #4a5568;
+          border-radius: 4px;
+        }
+        div::-webkit-scrollbar-thumb:hover {
+          background: #718096;
+        }
+        .projects-container {
+          scrollbar-width: none;  /* Firefox */
+          -ms-overflow-style: none;  /* Internet Explorer 10+ */
+        }
+        .projects-container::-webkit-scrollbar {
+          display: none;  /* WebKit */
+        }
+        .inlook-terminal-output {
+          scrollbar-width: none;  /* Firefox */
+          -ms-overflow-style: none;  /* Internet Explorer 10+ */
+        }
+        .inlook-terminal-output::-webkit-scrollbar {
+          display: none;  /* WebKit */
+        }
+        .inlook-terminal-output pre {
+          color: #ffffff !important;
+        }
+        .spreadsheet-container {
+          scrollbar-width: none;  /* Firefox */
+          -ms-overflow-style: none;  /* Internet Explorer 10+ */
+        }
+        .spreadsheet-container::-webkit-scrollbar {
+          display: none;  /* WebKit */
+        }
+        .terminal-output {
+          scrollbar-width: none;  /* Firefox */
+          -ms-overflow-style: none;  /* Internet Explorer 10+ */
+        }
+        .terminal-output::-webkit-scrollbar {
+          display: none;  /* WebKit */
+        }
+        .terminal-output pre {
+          color: #ffffff !important;
+        }
+      `}</style>
+      <div className="h-full flex flex-col">
+        {showInlook ? (
+          // Inlook AI Scraper UI
+          <div className="h-full flex flex-col">
+            
+            {/* Scrollable content area */}
+            <div className={`min-h-0 overflow-y-auto ${inlookState.isRunning ? 'hidden' : 'flex-1'}`} style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#4a5568 #2d3748'
+            }}>
+            
+            {/* Inlook Progress */}
+            {inlookState.isRunning && inlookState.progress && (
+              <div className="mb-6 p-4 bg-blue-900 rounded-lg border border-blue-700">
+                <h3 className="text-lg font-medium text-[#ffffff] mb-2">
+                  Inlook AI Analysis
+                </h3>
+                <div className="text-sm text-[#ffffff] mb-2">
+                  Status: {inlookState.progress.status.toUpperCase()}
+                </div>
+                <div className="text-sm text-[#ffffff] mb-2">
+                  {inlookState.progress.currentPhase}
+                </div>
+                {inlookState.progress.pagesCrawled > 0 && (
+                  <div className="text-sm text-[#ffffff]">
+                    Pages crawled: {inlookState.progress.pagesCrawled}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Inlook Results */}
+            {inlookState.result && (
+              <div className="h-full py-2 px-2">
+                
+                {/* Analysis Summary */}
+                <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+                  <div>
+                    <span className="text-[#ffffff]">Data Quality:</span>
+                    <span className="ml-2 text-[#ffffff]">{inlookState.result.office.dataQuality.toUpperCase()}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#ffffff]">Confidence:</span>
+                    <span className="font-medium ml-2 text-[#ffffff]">{inlookState.result.metadata.confidence}%</span>
+                  </div>
+                  <div>
+                    <span className="text-[#ffffff]">Pages Analyzed:</span>
+                    <span className="font-medium ml-2 text-[#ffffff]">{inlookState.result.metadata.pagesAnalyzed}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#ffffff]">Time:</span>
+                    <span className="font-medium ml-2 text-[#ffffff]">{inlookState.result.metadata.totalTime}s</span>
+                  </div>
+                </div>
+
+                {/* Company Overview */}
+                <div className="mb-6">
+                  <h4 className="text-lg font-medium text-[#ffffff] mb-3">{inlookState.result.office.name}</h4>
+                  <div className="bg-transparent p-0 rounded-lg">
+                    <div className="space-y-3">
+                      {inlookState.result.office.description && (
+                        <div>
+                          <p className="text-[#ffffff] mt-1">{inlookState.result.office.description}</p>
+                        </div>
+                      )}
+                      
+                      <div className="grid grid-cols-2 gap-4 pt-2">
+                        {inlookState.result.office.foundedYear && (
+                          <div>
+                            <span className="text-gray-300 text-sm">Founded:</span>
+                            <div className="text-[#ffffff] font-medium">{inlookState.result.office.foundedYear}</div>
+                          </div>
+                        )}
+                        {inlookState.result.office.projects && (
+                          <div>
+                            <span className="text-gray-300 text-sm">Projects:</span>
+                            <div className="text-[#ffffff] font-medium">{inlookState.result.office.projects.length} projects</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Information */}
+                {(inlookState.result.office.address || inlookState.result.office.phone || inlookState.result.office.email) && (
+                  <div className="mb-4">
+                    <h4 className="text-md font-medium text-[#ffffff] mb-2">Contact Information</h4>
+                    <div className="bg-black bg-opacity-30 p-3 rounded text-sm">
+                      <div className="grid grid-cols-1 gap-1">
+                        {inlookState.result.office.address && (
+                          <div><span className="text-gray-300">Address:</span> <span className="text-[#ffffff]">{inlookState.result.office.address}</span></div>
+                        )}
+                        {inlookState.result.office.phone && (
+                          <div><span className="text-gray-300">Phone:</span> <span className="text-[#ffffff]">{inlookState.result.office.phone}</span></div>
+                        )}
+                        {inlookState.result.office.email && (
+                          <div><span className="text-gray-300">Email:</span> <span className="text-[#ffffff]">{inlookState.result.office.email}</span></div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+
+                {/* Projects Portfolio */}
+                {inlookState.result.office.projects && inlookState.result.office.projects.length > 0 && (() => {
+                  const residentialProjects = inlookState.result.office.projects.filter((project: any) => 
+                    project.type && (project.type.toLowerCase().includes('residential') || project.type.toLowerCase().includes('residencial'))
+                  );
+                  const commercialProjects = inlookState.result.office.projects.filter((project: any) => 
+                    project.type && (project.type.toLowerCase().includes('commercial') || project.type.toLowerCase().includes('comercial'))
+                  );
+                  
+                  const renderProjectTable = (projects: any[], title: string, count: number) => (
+                    <div className="mb-6">
+                      <h4 className="text-lg font-medium text-[#ffffff] mb-3">{title} ({count} projects)</h4>
+                      
+                      {/* Projects Spreadsheet */}
+                      <div className="overflow-hidden" style={{ backgroundColor: 'transparent' }}>
+                        <div className="overflow-x-auto overflow-y-auto projects-container px-16">
+                          <table className="w-full text-sm">
+                            <tbody>
+                              {projects.map((project: any, index: number) => (
+                                <tr key={index} className="border-none hover:bg-gray-650 transition-colors" style={{ backgroundColor: 'transparent' }}>
+                                  <td className="py-0 text-[#ffffff] border-r border-gray-500" style={{ width: '300px' }}>
+                                    <div className="pl-2">
+                                      <div className="font-medium text-[#ffffff]">{project.name}</div>
+                                    </div>
+                                  </td>
+                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-gray-500" style={{ width: '400px' }}>
+                                    {project.location || '-'}
+                                  </td>
+                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-gray-500" style={{ width: '80px' }}>
+                                    {project.size || '-'}
+                                  </td>
+                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-gray-500" style={{ width: '110px' }}>
+                                    {project.status ? (
+                                      <span className="text-white text-xs">
+                                        {project.status}
+                                      </span>
+                                    ) : '-'}
+                                  </td>
+                                  <td className="py-0 pl-2 text-[#ffffff]">
+                                    {''}
+                                  </td>
+                                  <td className="py-0 pl-2 text-[#ffffff]">
+                                    {project.sustainability && project.sustainability.length > 0 ? (
+                                      <span className="text-green-400 text-xs">{project.sustainability.join(', ')}</span>
+                                    ) : ''}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+
+                  return (
+                    <div>
+                      {residentialProjects.length > 0 && renderProjectTable(residentialProjects, "Residential Projects", residentialProjects.length)}
+                      {commercialProjects.length > 0 && renderProjectTable(commercialProjects, "Commercial Projects", commercialProjects.length)}
+                    </div>
+                  );
+                })()}
+
+
+                {/* Awards */}
+                {inlookState.result.office.awards && inlookState.result.office.awards.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-md font-medium text-[#ffffff] mb-2">Awards ({inlookState.result.office.awards.length})</h4>
+                    <div className="bg-black bg-opacity-30 p-3 rounded text-sm max-h-32 overflow-y-auto">
+                      {inlookState.result.office.awards.slice(0, 3).map((award, index) => (
+                        <div key={index} className="mb-1 text-xs">
+                          <span className="text-[#ffffff] font-medium">{award.name}</span>
+                          {award.year && <span className="text-gray-300 ml-2">({award.year})</span>}
+                          {award.organization && <span className="text-gray-400 ml-2">- {award.organization}</span>}
+                        </div>
+                      ))}
+                      {inlookState.result.office.awards.length > 3 && (
+                        <div className="text-gray-400 text-xs">... and {inlookState.result.office.awards.length - 3} more awards</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Publications */}
+                {inlookState.result.office.publications && inlookState.result.office.publications.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-md font-medium text-[#ffffff] mb-2">Publications ({inlookState.result.office.publications.length})</h4>
+                    <div className="bg-black bg-opacity-30 p-3 rounded text-sm max-h-32 overflow-y-auto">
+                      {inlookState.result.office.publications.slice(0, 3).map((pub, index) => (
+                        <div key={index} className="mb-1 text-xs">
+                          <div className="text-[#ffffff] font-medium">{pub.title}</div>
+                          {pub.year && <span className="text-gray-300">({pub.year})</span>}
+                          {pub.publisher && <span className="text-gray-400 ml-2">- {pub.publisher}</span>}
+                        </div>
+                      ))}
+                      {inlookState.result.office.publications.length > 3 && (
+                        <div className="text-gray-400 text-xs">... and {inlookState.result.office.publications.length - 3} more publications</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+
+              </div>
+            )}
+
+            {/* Inlook Error */}
+            {inlookState.error && (
+              <div className="mb-6 p-4 bg-red-900 rounded-lg border border-red-700">
+                <h3 className="text-lg font-medium text-[#ffffff] mb-2">
+                  Inlook Analysis Failed
+                </h3>
+                <p className="text-[#ffffff] text-sm">{inlookState.error}</p>
+              </div>
+            )}
+            
+            </div> {/* End of scrollable content area */}
+
+            {/* Inlook Terminal Block - Always visible */}
+            <div className={`overflow-hidden ${inlookState.isRunning ? 'flex-1' : 'flex-none h-48'}`}>
+              <div className="h-full flex flex-col">
+                <div className="flex-none px-2 flex justify-between items-center">
+                  <span className="text-sm text-[#ffffff]">Inlook Terminal Output</span>
+                  {inlookState.logs.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const logsText = inlookState.logs.join('\n');
+                        navigator.clipboard.writeText(logsText);
+                      }}
+                      className="text-xs text-[#ffffff] hover:text-[#ffffff] transition-colors"
+                    >
+                      Copy Logs
+                    </button>
+                  )}
+                </div>
+                <div id="inlook-logs-container" className="flex-grow min-h-0 overflow-y-auto inlook-terminal-output">
+                  <pre className="text-sm font-mono text-[#ffffff] whitespace-pre-wrap">
+                    {inlookState.logs.length > 0 ? inlookState.logs.join('\n') : 
+                      inlookState.isRunning ? 'Initializing inlook scraper...' : 'No logs available'}
+                  </pre>
+                </div>
+                <div className="flex-none px-2">
+                  <button
+                    onClick={() => {
+                      // Auto scroll functionality for Inlook terminal
+                      const container = document.getElementById('inlook-logs-container');
+                      if (container) {
+                        container.scrollTop = container.scrollHeight;
+                      }
+                    }}
+                    className="text-xs text-[#ffffff] hover:text-[#ffffff] transition-colors"
+                  >
+                    Auto Scroll: ON
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : showSystem ? (
           // System UI
           <div className="h-full flex flex-col">
             <div className="flex justify-between items-center mb-4">
@@ -214,15 +533,6 @@ export default function Section1({
                     
                     {/* Hierarchical Display */}
                     <div className="overflow-hidden" style={{ backgroundColor: 'transparent' }}>
-                      <style jsx global>{`
-                        .spreadsheet-container {
-                          scrollbar-width: none;  /* Firefox */
-                          -ms-overflow-style: none;  /* Internet Explorer 10+ */
-                        }
-                        .spreadsheet-container::-webkit-scrollbar {
-                          display: none;  /* WebKit */
-                        }
-                      `}</style>
                       <div className="overflow-x-auto max-h-[2000px] overflow-y-auto spreadsheet-container">
                         <table className="w-full text-sm">
                           <tbody>
@@ -304,6 +614,7 @@ export default function Section1({
                   <p className="text-[#ffffff] text-sm">{progress.error}</p>
                 </div>
               )}
+
             </div>
 
             {/* Terminal Block - Always visible */}
@@ -320,18 +631,6 @@ export default function Section1({
                         Copy Logs
                       </button>
                     </div>
-                    <style jsx global>{`
-                      .terminal-output {
-                        scrollbar-width: none;  /* Firefox */
-                        -ms-overflow-style: none;  /* Internet Explorer 10+ */
-                      }
-                      .terminal-output::-webkit-scrollbar {
-                        display: none;  /* WebKit */
-                      }
-                      .terminal-output pre {
-                        color: #ffffff !important;
-                      }
-                    `}</style>
                     <div id="logs-container" className="flex-grow min-h-0 overflow-y-auto terminal-output">
                       <pre className="text-sm font-mono text-[#ffffff] whitespace-pre-wrap">
                         {logs.join('\n')}

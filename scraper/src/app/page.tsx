@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { ScraperConfig, SearchCategory, SEARCH_CATEGORIES, getSearchTermsForCategories } from './types';
 import { getDefaultCityByCountry, getCitiesByCountry } from './countries';
+import { InlookState } from './inlookTypes';
 import Section1 from './sections/Section1';
 import Section2 from './sections/Section2';
 import Section3 from './sections/Section3';
@@ -76,8 +77,18 @@ export default function ScraperInterface() {
   const [results, setResults] = useState<ScrapingResults | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
+  
+  // Inlook state
+  const [inlookState, setInlookState] = useState<InlookState>({
+    isRunning: false,
+    progress: null,
+    result: null,
+    error: null,
+    logs: []
+  });
   const [showCompendium, setShowCompendium] = useState(false);
   const [showSystem, setShowSystem] = useState(false);
+  const [showInlook, setShowInlook] = useState(false);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
   const [resetSection2Focus, setResetSection2Focus] = useState<number>(0);
   
@@ -266,6 +277,16 @@ export default function ScraperInterface() {
 
   const resetSystemState = () => {
     setShowSystem(false);
+  };
+
+  // Add ref for Section2 to access its inlook focus handler
+  const section2Ref = useRef<any>(null);
+
+  const handleInlookFocusActivate = (selectedOffice: any) => {
+    // Pass the selected office to Section2's inlook focus handler
+    if (section2Ref.current && section2Ref.current.handleInlookFocusActivate) {
+      section2Ref.current.handleInlookFocusActivate(selectedOffice);
+    }
   };
 
   // Helper function to get intensity level from current maxResults and searchRadius
@@ -630,12 +651,16 @@ export default function ScraperInterface() {
             showSystem={showSystem}
             resetSystemState={resetSystemState}
             handleCountryChange={handleCountryChange}
+            inlookState={inlookState}
+            showInlook={showInlook}
+            resetInlookState={() => setShowInlook(false)}
           />
         </div>
 
         {/* Section 2: Configuration Panel - 2% width - ALWAYS CENTER */}
         <div style={{ width: '2%' }}>
           <Section2 
+            ref={section2Ref}
             config={config}
             progress={progress}
             currentSearchTerms={currentSearchTerms}
@@ -649,6 +674,8 @@ export default function ScraperInterface() {
             onCompendiumClick={handleCompendiumClick}
             onSystemClick={handleSystemClick}
             resetFocusTrigger={resetSection2Focus}
+            setInlookState={setInlookState}
+            setShowInlook={setShowInlook}
           />
         </div>
 
@@ -661,6 +688,7 @@ export default function ScraperInterface() {
             progress={progress}
             resetCompendiumState={resetCompendiumState}
             config={config}
+            onInlookFocusActivate={handleInlookFocusActivate}
           />
         </div>
       </div>

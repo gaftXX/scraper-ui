@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { ScraperConfig, SearchCategory, SEARCH_CATEGORIES, CategoryConfig } from '../types';
 import { getCitiesByCountry } from '../countries';
 import Tooltip from '../components/tooltip/Tooltip';
+import { InlookConfig, InlookState, InlookProgress, InlookResult } from '../inlookTypes';
 
 interface Section2Props {
   config: ScraperConfig;
@@ -19,11 +20,13 @@ interface Section2Props {
   onCompendiumClick: () => void;
   onSystemClick: () => void;
   resetFocusTrigger: number;
+  setInlookState: (state: InlookState | ((prev: InlookState) => InlookState)) => void;
+  setShowInlook: (show: boolean) => void;
 }
 
 // City lists are now handled by the centralized country configuration
 
-export default function Section2({
+const Section2 = forwardRef<any, Section2Props>(({
   config,
   progress,
   currentSearchTerms,
@@ -36,8 +39,10 @@ export default function Section2({
   logs,
   onCompendiumClick,
   onSystemClick,
-  resetFocusTrigger
-}: Section2Props) {
+  resetFocusTrigger,
+  setInlookState,
+  setShowInlook
+}, ref) => {
   // Get cities based on selected country using centralized configuration
   const getCitiesForCountry = () => {
     const countryId = config.country || 'latvia';
@@ -60,16 +65,21 @@ export default function Section2({
   // Add state for dashboard focus mode
   const [isDashboardFocus, setIsDashboardFocus] = useState(false);
 
+  // Add state for inlook focus mode
+  const [isInlookFocus, setIsInlookFocus] = useState(false);
+  const [selectedOffice, setSelectedOffice] = useState<any>(null);
+
   // Add state for cross visibility
   const [isCrossVisible, setIsCrossVisible] = useState(true);
 
   // Add keyboard event listener
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      // Only allow Shift+S toggle when scraper is not running
-      if (event.key.toLowerCase() === 's' && event.shiftKey && progress.status !== 'running') {
+      // Only allow Shift+S toggle when scraper is not running and not in inlook focus
+      if (event.key.toLowerCase() === 's' && event.shiftKey && progress.status !== 'running' && !isInlookFocus) {
         setIsScraperFocus(prev => !prev); // Toggle the state
         setIsDashboardFocus(false); // Close dashboard focus when opening scraper focus
+        setIsInlookFocus(false); // Close inlook focus when opening scraper focus
         setIsCrossVisible(true); // Show cross when entering scraper focus
       }
       
@@ -77,7 +87,14 @@ export default function Section2({
       if (event.key.toLowerCase() === 'd' && event.shiftKey) {
         setIsDashboardFocus(prev => !prev); // Toggle the state
         setIsScraperFocus(false); // Close scraper focus when opening dashboard focus
+        setIsInlookFocus(false); // Close inlook focus when opening dashboard focus
         setIsCrossVisible(true); // Show cross when entering dashboard focus
+      }
+
+      // Escape key to exit inlook focus mode
+      if (event.key === 'Escape' && isInlookFocus) {
+        setIsInlookFocus(false);
+        setSelectedOffice(null);
       }
 
       // Toggle cross visibility with Shift+H
@@ -97,16 +114,141 @@ export default function Section2({
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, [progress.status, isScraperFocus, isDashboardFocus, isCrossVisible, config.cities?.length]); // Include all state dependencies
+  }, [progress.status, isScraperFocus, isDashboardFocus, isInlookFocus, isCrossVisible, config.cities?.length]); // Include all state dependencies
 
   // Reset focus states when resetFocusTrigger changes
   useEffect(() => {
     if (resetFocusTrigger > 0) {
       setIsScraperFocus(false);
       setIsDashboardFocus(false);
+      setIsInlookFocus(false);
+      setSelectedOffice(null);
       setIsCrossVisible(true); // Show cross when resetting focus
     }
   }, [resetFocusTrigger]);
+
+  // Handle inlook focus activation
+  const handleInlookFocusActivate = (office: any) => {
+    setSelectedOffice(office);
+    setIsInlookFocus(true);
+    setIsScraperFocus(false);
+    setIsDashboardFocus(false);
+    setIsCrossVisible(true);
+  };
+
+  // Expose handleInlookFocusActivate to parent component
+  useImperativeHandle(ref, () => ({
+    handleInlookFocusActivate
+  }));
+
+  // Inlook scraper function
+  const startInlookScraping = async () => {
+    if (!selectedOffice || !selectedOffice.website) {
+      console.error('No office selected or no website available');
+      return;
+    }
+
+    // Switch to Inlook state
+    setShowInlook(true);
+
+    setInlookState({
+      isRunning: true,
+      progress: null,
+      result: null,
+      error: null,
+      logs: []
+    });
+
+    try {
+      const config: InlookConfig = {
+        websiteUrl: selectedOffice.website.startsWith('http') ? selectedOffice.website : `https://${selectedOffice.website}`,
+        maxDepth: 3,
+        includeImages: true,
+        includeProjects: true,
+        includeTeam: true,
+        includeAwards: true,
+        includePublications: true,
+        timeout: 30000,
+        followRedirects: true,
+        respectRobotsTxt: true
+      };
+
+      const response = await fetch('/api/inlook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleInlookEvent(data);
+            } catch (error) {
+              console.error('Error parsing SSE data:', error);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      setInlookState(prev => ({
+        ...prev,
+        isRunning: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }));
+    }
+  };
+
+  const handleInlookEvent = (data: any) => {
+    switch (data.type) {
+      case 'progress':
+        setInlookState(prev => ({ ...prev, progress: data.progress }));
+        break;
+      case 'log':
+        setInlookState(prev => ({ 
+          ...prev, 
+          logs: [...prev.logs, data.message] 
+        }));
+        break;
+      case 'complete':
+        setInlookState(prev => ({ 
+          ...prev, 
+          isRunning: false, 
+          result: data.result,
+          progress: { ...prev.progress!, status: 'completed' }
+        }));
+        break;
+      case 'error':
+        setInlookState(prev => ({ 
+          ...prev, 
+          isRunning: false, 
+          error: data.error 
+        }));
+        break;
+    }
+  };
 
   // Helper function to get intensity level name
   const getIntensityName = (maxResults: number, searchRadius: number): string => {
@@ -357,7 +499,7 @@ export default function Section2({
                 style={{
                   width: 'calc(100% - 250px)',
                   left: 0,
-                  opacity: isScraperFocus ? 1 : 0.1
+                  opacity: (isScraperFocus || isInlookFocus) ? 1 : 0.1
                 }}
               />
             </div>
@@ -420,6 +562,54 @@ export default function Section2({
                   )}
                 </div>
               ))}
+            </div>
+
+            {/* Inlook button positioned on the left line */}
+            <div 
+              className={`absolute transition-opacity duration-300 ${isInlookFocus ? 'opacity-100' : 'opacity-0'}`}
+              style={{
+                right: '50px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 3,
+                pointerEvents: isInlookFocus ? 'auto' : 'none'
+              }}
+            >
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  console.log('Inlook button clicked - starting website scraping');
+                  startInlookScraping();
+                }}
+                disabled={!isInlookFocus}
+                className={`transition-colors ${
+                  !isInlookFocus
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
+                }`}
+                style={{
+                  width: '130px',
+                  height: '15px',
+                  backgroundColor: '#393837',
+                  padding: '0 8px',
+                  border: 'none',
+                  cursor: isInlookFocus ? 'pointer' : 'not-allowed',
+                  color: 'white',
+                  fontSize: '9px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                type="button"
+                title={!isInlookFocus ? 'Inlook mode not active'
+                  : 'Inlook Button (Click to scrape website)'
+                }
+              >
+                MAKE A INLOOK
+              </button>
             </div>
           </div>
           
@@ -833,6 +1023,58 @@ export default function Section2({
             }
           />
         </div>
+
+        {/* Inlook Focus Mode Display */}
+        {isInlookFocus && selectedOffice && (
+          <div 
+            className="absolute transition-opacity duration-300 opacity-100"
+            style={{
+              right: '100%',
+              top: '29%',
+              zIndex: 4,
+              backgroundColor: 'transparent',
+              padding: '20px',
+              borderRadius: '8px',
+              minWidth: '300px',
+              maxWidth: '500px'
+            }}
+          >
+            <div className="text-white">
+              <div className="space-y-2">
+                <div>
+                  {selectedOffice.modifiedName || selectedOffice.name}
+                </div>
+                {selectedOffice.uniqueId && (
+                  <div className="font-mono text-sm">
+                    {selectedOffice.uniqueId}
+                  </div>
+                )}
+                <div>
+                  {selectedOffice.address || 'N/A'}
+                </div>
+                {selectedOffice.phone && (
+                  <div>
+                    {selectedOffice.phone}
+                  </div>
+                )}
+                {selectedOffice.website && (
+                  <div>
+                    <a 
+                      href={selectedOffice.website.startsWith('http') ? selectedOffice.website : `https://${selectedOffice.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-white no-underline"
+                    >
+                      {selectedOffice.website.replace(/^https?:\/\//, '')}
+                    </a>
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 text-center text-sm text-gray-300">
+              </div>
+            </div>
+          </div>
+        )}
         
         <div className="space-y-4 flex-1 overflow-y-auto w-full">
           <div>
@@ -844,4 +1086,8 @@ export default function Section2({
       </div>
     </div>
   );
-} 
+});
+
+Section2.displayName = 'Section2';
+
+export default Section2; 

@@ -10,6 +10,7 @@ interface Section3Props {
   progress?: any; // Add progress prop to detect when scraping finishes
   resetCompendiumState?: () => void; // Add reset function prop
   config?: any; // Add config prop to access selected country
+  onInlookFocusActivate?: (selectedOffice: FirestoreOffice) => void; // Add inlook focus activation prop
 }
 
 interface FirestoreOffice {
@@ -76,7 +77,7 @@ const cleanAddressDisplay = (address: string, city?: string): string => {
   return cleanedAddress;
 };
 
-export default function Section3({ showCompendium, results, formatElapsedTime, progress, resetCompendiumState, config }: Section3Props) {
+export default function Section3({ showCompendium, results, formatElapsedTime, progress, resetCompendiumState, config, onInlookFocusActivate }: Section3Props) {
   const [showCities, setShowCities] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
   const [showData, setShowData] = useState(false);
@@ -93,6 +94,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
   const [editingName, setEditingName] = useState<string>(''); // Track the current editing name
   const [savingOfficeId, setSavingOfficeId] = useState<string | null>(null); // Track which office is being saved
   const [editModeEnabled, setEditModeEnabled] = useState<boolean>(false); // Track if edit mode is enabled
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null); // Track which row is selected
 
   // Debug logging
   console.log('Section3 props:', { showCompendium, results: !!results, resultsLength: results?.results?.length });
@@ -117,6 +119,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
       setFilteredData([]);
       setNewOffices(new Set());
       setPreviousData([]);
+      setSelectedRowIndex(null);
     }
   }, [showCompendium]);
 
@@ -167,6 +170,25 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
       setPreviousData([...firestoreData]);
     }
   }, [firestoreData, progress?.status]); // Removed previousData from dependencies
+
+  // Handle keyboard events for inlook focus mode
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Activate inlook focus mode when Shift+S is pressed and a row is selected
+      if (event.key.toLowerCase() === 's' && event.shiftKey && selectedRowIndex !== null && showData) {
+        event.preventDefault();
+        const selectedOffice = filteredData[selectedRowIndex];
+        if (selectedOffice && onInlookFocusActivate) {
+          onInlookFocusActivate(selectedOffice);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [selectedRowIndex, filteredData, showData, onInlookFocusActivate]);
 
   const fetchFirestoreData = async () => {
     setLoading(true);
@@ -478,6 +500,11 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
     }
   };
 
+  // Handle row selection by clicking on the number
+  const handleRowSelection = (rowIndex: number) => {
+    setSelectedRowIndex(selectedRowIndex === rowIndex ? null : rowIndex);
+  };
+
   return (
     <div className="col-span-2 h-full">
       <div className="h-full flex flex-col">
@@ -677,6 +704,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                         const displayName = office.modifiedName || office.name;
                         const officeId = `${displayName}-${office.address}-${office.city}`;
                         const isNewOffice = newOffices.has(officeId);
+                        const isSelected = selectedRowIndex === officeIndex;
                         const countdownNumber = officeIndex + 1; // Count up from 1
                         
                         return (
@@ -684,15 +712,19 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                             key={`${office.city}-${officeIndex}`} 
                             className={`border-none hover:bg-gray-650 transition-all duration-300 ${
                               isNewOffice ? 'bg-green-600' : ''
-                            }`} 
+                            } ${isSelected ? 'bg-gray-600' : ''}`} 
                             style={{ 
-                              backgroundColor: isNewOffice ? '#10b981' : 'transparent',
+                              backgroundColor: isNewOffice ? '#10b981' : isSelected ? '#4b5563' : 'transparent',
                               transition: 'background-color 0.3s ease'
                             }}
                           >
-                            <td className={`py-0 ${
-                              isNewOffice ? 'text-black' : 'text-[#ffffff]'
-                            }`} style={{ width: '25px', textAlign: 'center' }}>
+                            <td 
+                              className={`py-0 cursor-pointer hover:opacity-50 transition-opacity duration-300 ${
+                                isNewOffice ? 'text-black' : 'text-[#ffffff]'
+                              }`} 
+                              style={{ width: '25px', textAlign: 'center' }}
+                              onClick={() => handleRowSelection(officeIndex)}
+                            >
                               {countdownNumber}
                             </td>
                             {/* Unique ID Column */}
