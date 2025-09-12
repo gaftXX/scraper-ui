@@ -717,6 +717,7 @@ export default function ScraperInterface() {
             onInlookFocusActivate={handleInlookFocusActivate}
             onInputStateActivate={handleInputStateActivate}
             inlookDisabled={inlookDisabled}
+            inputAnalysisResult={inputAnalysisResult}
           />
         </div>
       </div>

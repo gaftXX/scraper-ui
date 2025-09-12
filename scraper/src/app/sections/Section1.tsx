@@ -505,18 +505,18 @@ export default function Section1({
                             <tbody>
                               {projects.map((project: any, index: number) => (
                                 <tr key={index} className="border-none hover:bg-gray-650 transition-colors" style={{ backgroundColor: 'transparent' }}>
-                                  <td className="py-0 text-[#ffffff] border-r border-gray-500" style={{ width: '300px' }}>
+                                  <td className="py-0 text-[#ffffff] border-r border-white" style={{ width: '300px' }}>
                                     <div className="pl-2">
                                       <div className="font-medium text-[#ffffff]">{project.name}</div>
                                     </div>
                                   </td>
-                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-gray-500" style={{ width: '400px' }}>
+                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-white" style={{ width: '400px' }}>
                                     {project.location || '-'}
                                   </td>
-                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-gray-500" style={{ width: '80px' }}>
+                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-white" style={{ width: '80px' }}>
                                     {project.size || '-'}
                                   </td>
-                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-gray-500" style={{ width: '110px' }}>
+                                  <td className="py-0 pl-2 text-[#ffffff] border-r border-white" style={{ width: '110px' }}>
                                     {project.status ? (
                                       <span className="text-white text-xs">
                                         {project.status}
@@ -1204,16 +1204,16 @@ export default function Section1({
                                   <React.Fragment key={`${city}-${category}`}>
                                     {offices.map((office: any, officeIndex: number) => (
                                       <tr key={`${city}-${category}-${officeIndex}`} className="border-none hover:bg-gray-650 transition-colors" style={{ backgroundColor: 'transparent' }}>
-                                        <td className="py-0 text-[#ffffff] border-r border-gray-500">
+                                        <td className="py-0 text-[#ffffff] border-r border-white">
                                           <div className="pl-[13px]">
                                             <div className="font-medium text-[#ffffff]">{office.name}</div>
                                             {office.phone && <div className="text-xs text-[#ffffff]">Phone: {office.phone}</div>}
                                           </div>
                                         </td>
-                                        <td className="py-0 pl-[5px] text-[#ffffff] border-r border-gray-500">
+                                        <td className="py-0 pl-[5px] text-[#ffffff] border-r border-white">
                                           {office.address || 'No address available'}
                                         </td>
-                                        <td className="py-0 pl-[5px] text-[#ffffff] border-r border-gray-500">
+                                        <td className="py-0 pl-[5px] text-[#ffffff] border-r border-white">
                                           {office.website ? (
                                             createTrackedLink(
                                               office.website.startsWith('http') ? office.website : `https://${office.website}`,

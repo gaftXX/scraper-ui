@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { getCitiesByCountry, getCountryById } from '../countries';
 import { createTrackedLink } from '../utils/clickTracker';
+import ProjectIndicator from '../components/ProjectIndicator';
 
 interface Section3Props {
   showCompendium: boolean;
@@ -14,6 +15,7 @@ interface Section3Props {
   onInlookFocusActivate?: (selectedOffice: FirestoreOffice) => void; // Add inlook focus activation prop
   onInputStateActivate?: (selectedOffice: FirestoreOffice) => void; // Add input state activation prop
   inlookDisabled: boolean; // Add inlook disabled prop
+  inputAnalysisResult?: any; // Add input analysis result prop to detect when analyzer finishes
 }
 
 interface FirestoreOffice {
@@ -33,6 +35,7 @@ interface FirestoreOffice {
   category?: string;
   uniqueId?: string; // Added for Spanish offices (B---S format)
   modifiedName?: string; // Added for custom office names
+  projectCount?: number; // Number of projects for this office
   timestamp?: any;
 }
 
@@ -80,7 +83,7 @@ const cleanAddressDisplay = (address: string, city?: string): string => {
   return cleanedAddress;
 };
 
-export default function Section3({ showCompendium, results, formatElapsedTime, progress, resetCompendiumState, config, onInlookFocusActivate, onInputStateActivate, inlookDisabled }: Section3Props) {
+export default function Section3({ showCompendium, results, formatElapsedTime, progress, resetCompendiumState, config, onInlookFocusActivate, onInputStateActivate, inlookDisabled, inputAnalysisResult }: Section3Props) {
   const [showCities, setShowCities] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
   const [showData, setShowData] = useState(false);
@@ -99,6 +102,9 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
   const [editModeEnabled, setEditModeEnabled] = useState<boolean>(false); // Track if edit mode is enabled
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null); // Track which row is selected
   const [showOfficePopup, setShowOfficePopup] = useState<boolean>(false); // Track if office popup is shown
+  const [officeAnalysis, setOfficeAnalysis] = useState<any>(null); // Track office analysis data
+  const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // Track analysis loading state
+  const [allOfficeAnalyses, setAllOfficeAnalyses] = useState<Map<string, any>>(new Map()); // Track analysis data for all offices
 
   // Debug logging
   console.log('Section3 props:', { showCompendium, results: !!results, resultsLength: results?.results?.length });
@@ -134,6 +140,60 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
       fetchFirestoreData();
     }
   }, [progress?.status, showCompendium]);
+
+  // Fetch analysis data for all Spanish offices when firestore data changes
+  useEffect(() => {
+    if (firestoreData.length > 0) {
+      const spanishOffices = firestoreData.filter(office => 
+        office.uniqueId?.startsWith('B') && office.uniqueId?.endsWith('S')
+      );
+      
+      // Fetch analysis for each Spanish office
+      spanishOffices.forEach(office => {
+        if (office.uniqueId && !allOfficeAnalyses.has(office.uniqueId)) {
+          fetchOfficeAnalysis(office.uniqueId);
+        }
+      });
+    }
+  }, [firestoreData]);
+
+  // Watch for input analysis result changes and update analysis data immediately
+  useEffect(() => {
+    if (inputAnalysisResult && inputAnalysisResult.analysisId && inputAnalysisResult.projects) {
+      console.log('Input analysis completed, updating analysis data for office:', inputAnalysisResult.analysisId);
+      
+      // Update the analysis data for this office immediately
+      setAllOfficeAnalyses(prev => {
+        const newMap = new Map(prev);
+        newMap.set(inputAnalysisResult.analysisId, {
+          projects: inputAnalysisResult.projects,
+          team: inputAnalysisResult.team,
+          relations: inputAnalysisResult.relations,
+          funding: inputAnalysisResult.funding,
+          clients: inputAnalysisResult.clients,
+          originalLanguage: inputAnalysisResult.originalLanguage,
+          translatedText: inputAnalysisResult.translatedText,
+          analyzedAt: inputAnalysisResult.timestamp
+        });
+        return newMap;
+      });
+      
+      // If the popup is open for this office, update the popup analysis data too
+      if (selectedRowIndex !== null && filteredData[selectedRowIndex]?.uniqueId === inputAnalysisResult.analysisId) {
+        setOfficeAnalysis({
+          projects: inputAnalysisResult.projects,
+          team: inputAnalysisResult.team,
+          relations: inputAnalysisResult.relations,
+          funding: inputAnalysisResult.funding,
+          clients: inputAnalysisResult.clients,
+          originalLanguage: inputAnalysisResult.originalLanguage,
+          translatedText: inputAnalysisResult.translatedText,
+          analyzedAt: inputAnalysisResult.timestamp
+        });
+        setLoadingAnalysis(false);
+      }
+    }
+  }, [inputAnalysisResult, selectedRowIndex]);
 
   // Handle new office highlighting - simplified to only highlight truly new offices
   useEffect(() => {
@@ -475,6 +535,10 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
     }
 
     try {
+      // Create an AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const response = await fetch('/api/update-office-name', {
         method: 'POST',
         headers: {
@@ -483,43 +547,119 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
         body: JSON.stringify({
           officeId,
           modifiedName: editingName.trim()
-        })
+        }),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (response.ok) {
+        const trimmedName = editingName.trim();
+        
         // Update the local data with the modified name
         setFirestoreData(prevData => 
           prevData.map(office => 
             office.uniqueId === officeId 
-              ? { ...office, modifiedName: editingName.trim() }
+              ? { ...office, modifiedName: trimmedName }
               : office
           )
         );
+        
         setFilteredData(prevData => 
           prevData.map(office => 
             office.uniqueId === officeId 
-              ? { ...office, modifiedName: editingName.trim() }
+              ? { ...office, modifiedName: trimmedName }
               : office
           )
         );
-        console.log('Office name updated successfully');
+        
+        console.log('Office name updated successfully:', trimmedName);
+        
+        // Clear saving state and editing state immediately on success
+        setSavingOfficeId(null);
+        setEditingOfficeId(null);
+        setEditingName('');
       } else {
-        console.error('Failed to update office name');
+        const errorData = await response.json();
+        console.error('Failed to update office name:', errorData.error);
+        // Clear saving state on error
+        setSavingOfficeId(null);
       }
     } catch (error) {
-      console.error('Error updating office name:', error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('Office name update timed out after 30 seconds');
+      } else {
+        console.error('Error updating office name:', error);
+      }
+      // Clear saving state on error
+      setSavingOfficeId(null);
+    }
+  };
+
+  // Get project count for an office from analysis data
+  const getProjectCountForOffice = (officeId: string): number => {
+    const analysis = allOfficeAnalyses.get(officeId);
+    if (analysis && analysis.projects && Array.isArray(analysis.projects)) {
+      return analysis.projects.length;
+    }
+    return 0;
+  };
+
+  // Fetch office analysis data
+  const fetchOfficeAnalysis = async (officeId: string) => {
+    if (!officeId) return;
+    
+    setLoadingAnalysis(true);
+    try {
+      const response = await fetch('/api/get-office-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          officeId,
+          country: config?.country || 'latvia'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setOfficeAnalysis(result.analysis);
+        
+        // Store analysis data for this office
+        setAllOfficeAnalyses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(officeId, result.analysis);
+          return newMap;
+        });
+      } else {
+        console.error('Failed to fetch office analysis');
+        setOfficeAnalysis(null);
+      }
+    } catch (error) {
+      console.error('Error fetching office analysis:', error);
+      setOfficeAnalysis(null);
     } finally {
-      // Clear saving state after a short delay to show the animation
-      setTimeout(() => {
-        setSavingOfficeId(null);
-        handleCancelEdit();
-      }, 1000);
+      setLoadingAnalysis(false);
     }
   };
 
   // Handle row selection by clicking on the number
   const handleRowSelection = (rowIndex: number) => {
-    setSelectedRowIndex(selectedRowIndex === rowIndex ? null : rowIndex);
+    const isClosingPopup = selectedRowIndex === rowIndex;
+    const isSwitchingOffice = selectedRowIndex !== null && selectedRowIndex !== rowIndex;
+    
+    setSelectedRowIndex(isClosingPopup ? null : rowIndex);
+    
+    if (isClosingPopup) {
+      // Closing popup, reset analysis data
+      setOfficeAnalysis(null);
+      setLoadingAnalysis(false);
+    } else if (isSwitchingOffice) {
+      // Switching to a different office, reset analysis data for the new office
+      setOfficeAnalysis(null);
+      setLoadingAnalysis(false);
+    }
   };
 
   return (
@@ -757,7 +897,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                               )}
                             </td>
                             {/* Office Name Column */}
-                            <td className={`py-0 border-r border-gray-500 ${
+                            <td className={`py-0 border-r border-white ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`}>
                               <div>
@@ -797,26 +937,21 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                                 }`}>Phone: {office.phone}</div>}
                               </div>
                             </td>
-                            <td className={`py-0 pl-[5px] border-r border-gray-500 ${
+                            {/* Box Column */}
+                            <td className={`pt-0 pb-0 border-r border-white ${
+                              isNewOffice ? 'text-black' : 'text-[#ffffff]'
+                            }`} style={{ textAlign: 'center', width: '100px' }}>
+                              <ProjectIndicator 
+                                projectCount={getProjectCountForOffice(office.uniqueId || '')}
+                                isNewOffice={isNewOffice}
+                                opacity={0.2}
+                              />
+                            </td>
+                            {/* Address Column */}
+                            <td className={`py-0 pl-[5px] ${
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`} style={{ width: '330px' }}>
                               {office.address ? cleanAddressDisplay(office.address, office.city) : '-'}
-                            </td>
-                            <td className={`py-0 pl-[5px] ${
-                              isNewOffice ? 'text-black' : 'text-[#ffffff]'
-                            }`}>
-                              {office.website ? (
-                                createTrackedLink(
-                                  office.website.startsWith('http') ? office.website : `https://${office.website}`,
-                                  office.website.replace(/^https?:\/\//, ''),
-                                  {
-                                    officeId: office.uniqueId || `${office.name}-${office.address}`,
-                                    officeName: office.name,
-                                    website: office.website
-                                  },
-                                  `cursor-pointer ${isNewOffice ? 'text-black' : 'text-[#ffffff]'}`
-                                )
-                              ) : '-'}
                             </td>
                           </tr>
                         );
@@ -840,94 +975,183 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
         
         {/* Inlook Popup */}
         {showOfficePopup && selectedRowIndex !== null && filteredData[selectedRowIndex] && (
-          <div className="absolute bottom-5 left-1/2 transform -translate-x-1/2 h-1/3 bg-[#393837] p-4 overflow-y-auto z-50 w-[95%]">
+          <div className="absolute bottom-5 left-1/2 transform -translate-x-1/2 h-1/3 bg-[#393837] px-1 py-4 z-50 w-[95%]">
+            <style jsx>{`
+              .popup-container {
+                scrollbar-width: none;  /* Firefox */
+                -ms-overflow-style: none;  /* Internet Explorer 10+ */
+              }
+              .popup-container::-webkit-scrollbar {
+                display: none;  /* WebKit */
+              }
+            `}</style>
+            {(() => {
+              // Fetch analysis data when popup opens
+              const officeId = filteredData[selectedRowIndex].uniqueId;
+              if (officeId && !officeAnalysis && !loadingAnalysis) {
+                fetchOfficeAnalysis(officeId);
+              }
+              return null;
+            })()}
               
-              <div className="grid grid-cols-3 gap-8 text-sm w-full">
-                <div>
-                  <div className="text-white font-medium">{filteredData[selectedRowIndex].name}</div>
+              <div className="text-sm w-full flex flex-col h-full">
+                {/* Fixed Header - Office Name and Address */}
+                <div className="flex-shrink-0 mb-4 flex items-start justify-between">
+                  <div className="text-white font-medium break-words">{filteredData[selectedRowIndex].name}</div>
+                  {filteredData[selectedRowIndex].address && (
+                    <div className="text-white text-sm break-words text-right max-w-[60%]">{filteredData[selectedRowIndex].address}</div>
+                  )}
                 </div>
                 
-                {filteredData[selectedRowIndex].address && (
-                  <div className="col-span-3">
-                    <div className="text-white">{filteredData[selectedRowIndex].address}</div>
+                {/* Scrollable Content Area */}
+                <div className="flex-1 overflow-y-auto popup-container">
+                  {/* Contact Information Grid */}
+                  <div className="grid grid-cols-3 gap-8">
+                  
+                  {filteredData[selectedRowIndex].phone && (
+                    <div>
+                      <div className="text-white">{filteredData[selectedRowIndex].phone}</div>
+                    </div>
+                  )}
+                  
+                  {filteredData[selectedRowIndex].email && (
+                    <div>
+                      <div className="text-white">{filteredData[selectedRowIndex].email}</div>
+                    </div>
+                  )}
+                  
+                  {filteredData[selectedRowIndex].rating && (
+                    <div>
+                      <div className="text-white">{filteredData[selectedRowIndex].rating}/5</div>
+                    </div>
+                  )}
+                  
+                  {filteredData[selectedRowIndex].reviews && (
+                    <div>
+                      <div className="text-white">{filteredData[selectedRowIndex].reviews}</div>
+                    </div>
+                  )}
+                  
+                  {filteredData[selectedRowIndex].hours && (
+                    <div>
+                      <div className="text-white">{filteredData[selectedRowIndex].hours}</div>
+                    </div>
+                  )}
+                  
+                  {filteredData[selectedRowIndex].description && (
+                    <div className="col-span-3">
+                      <div className="text-white">{filteredData[selectedRowIndex].description}</div>
+                    </div>
+                  )}
+                  
+                  {filteredData[selectedRowIndex].businessLabels && filteredData[selectedRowIndex].businessLabels.length > 0 && (
+                    <div className="col-span-3">
+                      <div className="text-white">{filteredData[selectedRowIndex].businessLabels.join(', ')}</div>
+                    </div>
+                  )}
                   </div>
-                )}
+                  
+                  {/* Projects Section - Only show for Spanish offices (B---S identifier) */}
+                  {filteredData[selectedRowIndex]?.uniqueId?.startsWith('B') && filteredData[selectedRowIndex]?.uniqueId?.endsWith('S') && (
+                    <div className="mt-4">
+                      {(() => {
+                        // Debug logging
+                        console.log('Projects section debug:', {
+                          loadingAnalysis,
+                          hasOfficeAnalysis: !!officeAnalysis,
+                          projects: officeAnalysis?.projects,
+                          projectsLength: officeAnalysis?.projects?.length
+                        });
+                        
+                        if (loadingAnalysis) {
+                          return <div className="text-white text-sm">Loading projects...</div>;
+                        } else if (officeAnalysis && officeAnalysis.projects && Array.isArray(officeAnalysis.projects) && officeAnalysis.projects.length > 0) {
+                          return (
+                            <div className="overflow-hidden">
+                              <table className="w-full text-sm">
+                                <tbody>
+                                  {officeAnalysis.projects.map((project: any, projectIndex: number) => (
+                                    <tr 
+                                      key={projectIndex} 
+                                      className="border-none hover:bg-gray-650 transition-all duration-300"
+                                      style={{ 
+                                        backgroundColor: 'transparent',
+                                        transition: 'background-color 0.3s ease'
+                                      }}
+                                    >
+                                      {/* Project Number */}
+                                      <td 
+                                        className="py-0 text-[#ffffff] cursor-pointer hover:opacity-50 transition-opacity duration-300"
+                                        style={{ width: '25px', textAlign: 'center' }}
+                                      >
+                                        {projectIndex + 1}
+                                      </td>
+                                      {/* Project Name */}
+                                      <td className="py-0 border-r border-white text-[#ffffff]" style={{ width: '550px' }}>
+                                        <div className="font-medium">
+                                          {project.name || 'Unnamed Project'}
+                                        </div>
+                                      </td>
+                                      {/* Project Size */}
+                                      <td className="py-0 pl-[5px] border-r border-white text-[#ffffff]" style={{ width: '120px' }}>
+                                        {project.size ? project.size.replace(/[^\d,/]/g, '') || '-' : '-'}
+                                      </td>
+                                      {/* Project Location */}
+                                      <td className="py-0 pl-[5px] border-r border-white text-[#ffffff]" style={{ width: '330px' }}>
+                                        {project.location || '-'}
+                                      </td>
+                                      {/* Project Status */}
+                                      <td className="py-0 pl-[5px] text-[#ffffff]">
+                                        {project.status || '-'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        } else if (officeAnalysis && (!officeAnalysis.projects || officeAnalysis.projects.length === 0)) {
+                          return <div className="text-white text-sm">No projects received</div>;
+                        } else {
+                          return null;
+                        }
+                      })()}
+                    </div>
+                  )}
+                </div>
                 
-                {filteredData[selectedRowIndex].website && (
-                  <div>
-                    {createTrackedLink(
-                      filteredData[selectedRowIndex].website.startsWith('http') ? filteredData[selectedRowIndex].website : `https://${filteredData[selectedRowIndex].website}`,
-                      filteredData[selectedRowIndex].website.replace(/^https?:\/\//, ''),
-                      {
-                        officeId: filteredData[selectedRowIndex].uniqueId || `${filteredData[selectedRowIndex].name}-${filteredData[selectedRowIndex].address}`,
-                        officeName: filteredData[selectedRowIndex].name,
-                        website: filteredData[selectedRowIndex].website
-                      },
-                      "text-white hover:text-gray-300"
-                    )}
-                  </div>
-                )}
-                
-                {filteredData[selectedRowIndex].phone && (
-                  <div>
-                    <div className="text-white">{filteredData[selectedRowIndex].phone}</div>
-                  </div>
-                )}
-                
-                {filteredData[selectedRowIndex].email && (
-                  <div>
-                    <div className="text-white">{filteredData[selectedRowIndex].email}</div>
-                  </div>
-                )}
-                
-                {filteredData[selectedRowIndex].rating && (
-                  <div>
-                    <div className="text-white">{filteredData[selectedRowIndex].rating}/5</div>
-                  </div>
-                )}
-                
-                {filteredData[selectedRowIndex].reviews && (
-                  <div>
-                    <div className="text-white">{filteredData[selectedRowIndex].reviews}</div>
-                  </div>
-                )}
-                
-                {filteredData[selectedRowIndex].hours && (
-                  <div>
-                    <div className="text-white">{filteredData[selectedRowIndex].hours}</div>
-                  </div>
-                )}
-                
-                {filteredData[selectedRowIndex].description && (
-                  <div className="col-span-3">
-                    <div className="text-white">{filteredData[selectedRowIndex].description}</div>
-                  </div>
-                )}
-                
-                {filteredData[selectedRowIndex].businessLabels && filteredData[selectedRowIndex].businessLabels.length > 0 && (
-                  <div className="col-span-3">
-                    <div className="text-white">{filteredData[selectedRowIndex].businessLabels.join(', ')}</div>
-                  </div>
-                )}
-            </div>
-            
-            {/* Input Data Button - Absolute Bottom Right */}
-            <div className="absolute bottom-0 right-0 p-4">
-              <button
-                onClick={() => {
-                  if (onInputStateActivate && selectedRowIndex !== null) {
-                    onInputStateActivate(filteredData[selectedRowIndex]);
-                  }
-                }}
-                className="text-white text-sm hover:text-gray-300 transition-colors cursor-pointer"
-                style={{
-                  border: 'none',
-                  backgroundColor: 'transparent'
-                }}
-              >
-                INPUT DATA
-              </button>
-            </div>
+                {/* Fixed Footer - Website Link and Input Data Button */}
+                <div className="flex-shrink-0 mt-2 pt-2 flex justify-between items-center">
+                  {filteredData[selectedRowIndex].website && (
+                    <div>
+                      {createTrackedLink(
+                        filteredData[selectedRowIndex].website.startsWith('http') ? filteredData[selectedRowIndex].website : `https://${filteredData[selectedRowIndex].website}`,
+                        filteredData[selectedRowIndex].website.replace(/^https?:\/\//, ''),
+                        {
+                          officeId: filteredData[selectedRowIndex].uniqueId || `${filteredData[selectedRowIndex].name}-${filteredData[selectedRowIndex].address}`,
+                          officeName: filteredData[selectedRowIndex].name,
+                          website: filteredData[selectedRowIndex].website
+                        },
+                        "text-white hover:text-gray-300"
+                      )}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (onInputStateActivate && selectedRowIndex !== null) {
+                        onInputStateActivate(filteredData[selectedRowIndex]);
+                      }
+                    }}
+                    className="text-white text-sm hover:text-gray-300 transition-colors cursor-pointer"
+                    style={{
+                      border: 'none',
+                      backgroundColor: 'transparent'
+                    }}
+                  >
+                    INPUT DATA
+                  </button>
+                </div>
+              </div>
           </div>
         )}
       </div>

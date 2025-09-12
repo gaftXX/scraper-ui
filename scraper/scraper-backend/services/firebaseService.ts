@@ -1847,8 +1847,8 @@ export class FirebaseService {
 
       const data = analysisDoc.data();
       return [{
-        ...data,
-        analyzedAt: data.analyzedAt?.toDate()
+          ...data,
+          analyzedAt: data.analyzedAt?.toDate()
       } as OfficeAnalysis];
     } catch (error) {
       console.error('Error getting all office analyses:', error);

@@ -19,8 +19,13 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 export async function POST(request: NextRequest) {
+  let officeId: string | undefined;
+  let modifiedName: string | undefined;
+  
   try {
-    const { officeId, modifiedName } = await request.json();
+    const body = await request.json();
+    officeId = body.officeId;
+    modifiedName = body.modifiedName;
 
     if (!officeId || !modifiedName) {
       return NextResponse.json(
@@ -29,44 +34,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find the office document across all countries and cities
+    console.log(`Starting office name update for ${officeId}...`);
+
+    // Use optimized search with early termination
+    console.log('Using optimized manual search method...');
     const countries = ['latvia', 'spain'];
     let updated = false;
 
-    for (const country of countries) {
-      const countryRef = db.collection(country);
-      const citiesSnapshot = await countryRef.get();
+    // Search in parallel for better performance
+    const searchPromises = countries.map(async (country) => {
+      try {
+        const countryRef = db.collection(country);
+        const citiesSnapshot = await countryRef.get();
 
-      for (const cityDoc of citiesSnapshot.docs) {
-        const cityRef = countryRef.doc(cityDoc.id);
-        
-        // Get all category subcollections for this city
-        const categoryCollections = await cityDoc.ref.listCollections();
-        
-        for (const categoryCollection of categoryCollections) {
-          const categorySnapshot = await categoryCollection.get();
+        for (const cityDoc of citiesSnapshot.docs) {
+          // Get all category subcollections for this city
+          const categoryCollections = await cityDoc.ref.listCollections();
           
-          for (const officeDoc of categorySnapshot.docs) {
-            const officeData = officeDoc.data();
+          for (const categoryCollection of categoryCollections) {
+            // Use a query to find the office directly instead of getting all documents
+            const officeQuery = categoryCollection.where('uniqueId', '==', officeId).limit(1);
+            const officeSnapshot = await officeQuery.get();
             
-            if (officeData && officeData.uniqueId === officeId) {
+            if (!officeSnapshot.empty) {
+              const officeDoc = officeSnapshot.docs[0];
               // Update the office with modified name
               await officeDoc.ref.update({
                 modifiedName: modifiedName,
                 modifiedAt: admin.firestore.Timestamp.now()
               });
 
-              updated = true;
               console.log(`Updated office name for ${officeId} in ${country}/${cityDoc.id}/${categoryCollection.id}/${officeDoc.id}`);
-              break;
+              return true; // Found and updated
             }
           }
-          if (updated) break;
         }
-        if (updated) break;
+        return false; // Not found in this country
+      } catch (error) {
+        console.error(`Error searching in ${country}:`, error);
+        return false;
       }
-      if (updated) break;
-    }
+    });
+
+    // Wait for all searches to complete
+    const results = await Promise.all(searchPromises);
+    updated = results.some(result => result === true);
 
     if (!updated) {
       return NextResponse.json(
@@ -75,12 +87,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log(`Office name update completed for ${officeId}`);
     return NextResponse.json({ success: true });
 
   } catch (error) {
     console.error('Error updating office name:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      officeId,
+      modifiedName
+    });
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
