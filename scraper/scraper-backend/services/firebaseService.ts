@@ -1,5 +1,5 @@
 import admin from 'firebase-admin';
-import { ArchitectureOffice, SearchResult, ScrapingTiming, SearchCategory } from '../types';
+import { ArchitectureOffice, SearchResult, ScrapingTiming, SearchCategory, ProjectData, ProjectCollection, OfficeAnalysis, WebsiteClick, ClickTrackingStats } from '../types';
 
 export interface FirebaseConfig {
   projectId: string;
@@ -209,6 +209,22 @@ export class FirebaseService {
 
           if (office.placeId) cleanOfficeData.placeId = office.placeId;
           if (office.uniqueId) cleanOfficeData.uniqueId = office.uniqueId;
+          
+          // Preserve custom data and metadata
+          if (office.modifiedName) cleanOfficeData.modifiedName = office.modifiedName;
+          if (office.customData) {
+            cleanOfficeData.customData = {
+              ...office.customData,
+              lastModified: office.customData.lastModified ? admin.firestore.Timestamp.fromDate(office.customData.lastModified) : admin.firestore.Timestamp.now()
+            };
+          }
+          if (office.metadata) {
+            cleanOfficeData.metadata = {
+              ...office.metadata,
+              scrapedAt: office.metadata.scrapedAt ? admin.firestore.Timestamp.fromDate(office.metadata.scrapedAt) : admin.firestore.Timestamp.now(),
+              lastUpdated: office.metadata.lastUpdated ? admin.firestore.Timestamp.fromDate(office.metadata.lastUpdated) : admin.firestore.Timestamp.now()
+            };
+          }
 
           batch.set(officeRef, cleanOfficeData);
         });
@@ -251,21 +267,38 @@ export class FirebaseService {
         });
 
         if (existingOffice) {
-          // This is a duplicate - preserve the existing office with its modifiedName
+          // This is a duplicate - preserve the existing office with its custom data
           duplicatesFound++;
           console.log(`Duplicate found: ${office.name} - ${office.address}`);
           
-          // Preserve the existing office data (including modifiedName) but update other fields
+          // Preserve the existing office data (including customData and modifiedName) but update scraped fields
           resultOffices.push({
-            ...existingOffice, // Keep existing data including modifiedName
+            ...existingOffice, // Keep existing data including customData and modifiedName
             ...office, // Update with fresh scraped data
             modifiedName: existingOffice.modifiedName, // Explicitly preserve modifiedName
+            customData: existingOffice.customData, // Explicitly preserve customData
+            metadata: {
+              ...existingOffice.metadata,
+              scrapedAt: new Date(),
+              lastUpdated: new Date(),
+              dataVersion: (existingOffice.metadata?.dataVersion || 0) + 1,
+              customDataExists: !!existingOffice.customData
+            },
             existedInDatabase: true
           });
         } else {
           // This is a new office
           newOfficesFound++;
-          resultOffices.push({ ...office, existedInDatabase: false });
+          resultOffices.push({ 
+            ...office, 
+            existedInDatabase: false,
+            metadata: {
+              scrapedAt: new Date(),
+              lastUpdated: new Date(),
+              dataVersion: 1,
+              customDataExists: false
+            }
+          });
         }
       }
 
@@ -307,21 +340,38 @@ export class FirebaseService {
         });
 
         if (existingOffice) {
-          // This is a duplicate - preserve the existing office with its modifiedName
+          // This is a duplicate - preserve the existing office with its custom data
           duplicatesFound++;
           console.log(`Duplicate found in ${category}: ${office.name} - ${office.address}`);
           
-          // Preserve the existing office data (including modifiedName) but update other fields
+          // Preserve the existing office data (including customData and modifiedName) but update scraped fields
           resultOffices.push({
-            ...existingOffice, // Keep existing data including modifiedName
+            ...existingOffice, // Keep existing data including customData and modifiedName
             ...office, // Update with fresh scraped data
             modifiedName: existingOffice.modifiedName, // Explicitly preserve modifiedName
+            customData: existingOffice.customData, // Explicitly preserve customData
+            metadata: {
+              ...existingOffice.metadata,
+              scrapedAt: new Date(),
+              lastUpdated: new Date(),
+              dataVersion: (existingOffice.metadata?.dataVersion || 0) + 1,
+              customDataExists: !!existingOffice.customData
+            },
             existedInDatabase: true
           });
         } else {
           // This is a new office
           newOfficesFound++;
-          resultOffices.push({ ...office, existedInDatabase: false });
+          resultOffices.push({ 
+            ...office, 
+            existedInDatabase: false,
+            metadata: {
+              scrapedAt: new Date(),
+              lastUpdated: new Date(),
+              dataVersion: 1,
+              customDataExists: false
+            }
+          });
         }
       }
 
@@ -343,9 +393,11 @@ export class FirebaseService {
     try {
       const existingOffices = await this.getAllOffices(country);
       const markedOffices: ArchitectureOffice[] = [];
+      let duplicatesFound = 0;
+      let newOfficesFound = 0;
 
       for (const office of offices) {
-        const existsInDatabase = existingOffices.some(existing => {
+        const existingOffice = existingOffices.find(existing => {
           // Check for existence based on name and address
           const nameMatch = existing.name && office.name && 
                            existing.name.toLowerCase().trim() === office.name.toLowerCase().trim();
@@ -360,10 +412,43 @@ export class FirebaseService {
           return placeIdMatch || (nameMatch && addressMatch);
         });
 
-        markedOffices.push({ ...office, existedInDatabase: existsInDatabase });
+        if (existingOffice) {
+          // This is a duplicate - preserve the existing office with its custom data
+          duplicatesFound++;
+          console.log(`Duplicate found: ${office.name} - ${office.address} (preserving custom data: ${existingOffice.customData ? 'yes' : 'no'})`);
+          
+          // Preserve the existing office data (including customData and modifiedName) but update scraped fields
+          markedOffices.push({
+            ...existingOffice, // Keep existing data including customData and modifiedName
+            ...office, // Update with fresh scraped data
+            modifiedName: existingOffice.modifiedName, // Explicitly preserve modifiedName
+            customData: existingOffice.customData, // Explicitly preserve customData
+            metadata: {
+              ...existingOffice.metadata,
+              scrapedAt: new Date(),
+              lastUpdated: new Date(),
+              dataVersion: (existingOffice.metadata?.dataVersion || 0) + 1,
+              customDataExists: !!existingOffice.customData
+            },
+            existedInDatabase: true
+          });
+        } else {
+          // This is a new office
+          newOfficesFound++;
+          markedOffices.push({ 
+            ...office, 
+            existedInDatabase: false,
+            metadata: {
+              scrapedAt: new Date(),
+              lastUpdated: new Date(),
+              dataVersion: 1,
+              customDataExists: false
+            }
+          });
+        }
       }
 
-      console.log(`Database existence check complete: ${markedOffices.filter(o => o.existedInDatabase).length} existing, ${markedOffices.filter(o => !o.existedInDatabase).length} new`);
+      console.log(`Database existence check complete: ${newOfficesFound} new, ${duplicatesFound} duplicates (preserved with modifiedName)`);
       return markedOffices;
     } catch (error) {
       console.error('Error checking database existence:', error);
@@ -585,7 +670,16 @@ export class FirebaseService {
                 category: data.category || categoryCollection.id,
                 uniqueId: data.uniqueId,
                 modifiedName: data.modifiedName,
-                modifiedAt: data.modifiedAt
+                modifiedAt: data.modifiedAt,
+                customData: data.customData ? {
+                  ...data.customData,
+                  lastModified: data.customData.lastModified?.toDate()
+                } : undefined,
+                metadata: data.metadata ? {
+                  ...data.metadata,
+                  scrapedAt: data.metadata.scrapedAt?.toDate(),
+                  lastUpdated: data.metadata.lastUpdated?.toDate()
+                } : undefined
               });
             }
           });
@@ -800,6 +894,1204 @@ export class FirebaseService {
               console.log('All data cleared from latvia collection');
     } catch (error) {
       console.error('Error clearing data from Firestore:', error);
+      throw error;
+    }
+  }
+
+  // **PROJECT DATA MANAGEMENT METHODS**
+
+  /**
+   * Save project data for an architecture office
+   */
+  async saveProjectData(project: ProjectData, country?: string): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const projectRef = this.db
+        .collection(countryCollection)
+        .doc('projects')
+        .collection('offices')
+        .doc(project.officeId)
+        .collection('projects')
+        .doc(project.id);
+
+      const projectData = {
+        ...project,
+        createdAt: admin.firestore.Timestamp.fromDate(project.createdAt),
+        updatedAt: admin.firestore.Timestamp.fromDate(project.updatedAt)
+      };
+
+      await projectRef.set(projectData, { merge: true });
+      console.log(`Saved project data for office ${project.officeId}: ${project.name}`);
+    } catch (error) {
+      console.error('Error saving project data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all projects for a specific architecture office
+   */
+  async getProjectsForOffice(officeId: string, country?: string): Promise<ProjectData[]> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const projectsSnapshot = await this.db
+        .collection(countryCollection)
+        .doc('projects')
+        .collection('offices')
+        .doc(officeId)
+        .collection('projects')
+        .get();
+
+      const projects: ProjectData[] = [];
+      projectsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        projects.push({
+          ...data,
+          createdAt: data.createdAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate()
+        } as ProjectData);
+      });
+
+      return projects;
+    } catch (error) {
+      console.error('Error getting projects for office:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update custom data for an architecture office
+   */
+  async updateOfficeCustomData(officeId: string, customData: any, country?: string): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      
+      // Find the office document across all cities and categories
+      const countrySnapshot = await this.db.collection(countryCollection).get();
+      
+      for (const cityDoc of countrySnapshot.docs) {
+        const categoryCollections = await cityDoc.ref.listCollections();
+        
+        for (const categoryCollection of categoryCollections) {
+          const officeSnapshot = await categoryCollection
+            .where('uniqueId', '==', officeId)
+            .limit(1)
+            .get();
+
+          if (!officeSnapshot.empty) {
+            const officeDoc = officeSnapshot.docs[0];
+            const officeRef = officeDoc.ref;
+            
+            const updateData = {
+              customData: {
+                ...customData,
+                lastModified: admin.firestore.Timestamp.now()
+              },
+              metadata: {
+                lastUpdated: admin.firestore.Timestamp.now(),
+                customDataExists: true
+              }
+            };
+
+            await officeRef.update(updateData);
+            console.log(`Updated custom data for office ${officeId}`);
+            return;
+          }
+        }
+      }
+      
+      throw new Error(`Office with ID ${officeId} not found`);
+    } catch (error) {
+      console.error('Error updating office custom data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get office by unique ID with all custom data
+   */
+  async getOfficeById(officeId: string, country?: string): Promise<ArchitectureOffice | null> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const countrySnapshot = await this.db.collection(countryCollection).get();
+      
+      for (const cityDoc of countrySnapshot.docs) {
+        const cityName = cityDoc.id;
+        const categoryCollections = await cityDoc.ref.listCollections();
+        
+        for (const categoryCollection of categoryCollections) {
+          const officeSnapshot = await categoryCollection
+            .where('uniqueId', '==', officeId)
+            .limit(1)
+            .get();
+
+          if (!officeSnapshot.empty) {
+            const officeDoc = officeSnapshot.docs[0];
+            const data = officeDoc.data();
+            
+            return {
+              name: data.name || '',
+              address: data.address || '',
+              phone: data.phone,
+              website: data.website,
+              email: data.email,
+              rating: data.rating,
+              reviews: data.reviews,
+              hours: data.hours,
+              description: data.description,
+              placeId: data.placeId,
+              city: cityName,
+              category: data.category || categoryCollection.id,
+              uniqueId: data.uniqueId,
+              modifiedName: data.modifiedName,
+              modifiedAt: data.modifiedAt,
+              customData: data.customData ? {
+                ...data.customData,
+                lastModified: data.customData.lastModified?.toDate()
+              } : undefined,
+              metadata: data.metadata ? {
+                ...data.metadata,
+                scrapedAt: data.metadata.scrapedAt?.toDate(),
+                lastUpdated: data.metadata.lastUpdated?.toDate()
+              } : undefined
+            };
+          }
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting office by ID:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete project data
+   */
+  async deleteProjectData(officeId: string, projectId: string, country?: string): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const projectRef = this.db
+        .collection(countryCollection)
+        .doc('projects')
+        .collection('offices')
+        .doc(officeId)
+        .collection('projects')
+        .doc(projectId);
+
+      await projectRef.delete();
+      console.log(`Deleted project ${projectId} for office ${officeId}`);
+    } catch (error) {
+      console.error('Error deleting project data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all project collections for an office
+   */
+  async getProjectCollectionsForOffice(officeId: string, country?: string): Promise<ProjectCollection[]> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const collectionsSnapshot = await this.db
+        .collection(countryCollection)
+        .doc('projects')
+        .collection('offices')
+        .doc(officeId)
+        .collection('collections')
+        .get();
+
+      const collections: ProjectCollection[] = [];
+      for (const doc of collectionsSnapshot.docs) {
+        const data = doc.data();
+        const projects = await this.getProjectsForOffice(officeId, country);
+        
+        collections.push({
+          ...data,
+          projects: projects,
+          createdAt: data.createdAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate()
+        } as ProjectCollection);
+      }
+
+      return collections;
+    } catch (error) {
+      console.error('Error getting project collections:', error);
+      throw error;
+    }
+  }
+
+  // **INPUT ANALYSIS METHODS**
+
+  /**
+   * Merge analysis data with feedback tracking
+   */
+  private mergeAnalysisDataWithFeedback(existingData: any, newAnalysis: any, newAnalysisId: string): { mergedAnalysis: any; feedback: any } {
+    if (!existingData) {
+      // No existing data, return new analysis with feedback
+      return {
+        mergedAnalysis: newAnalysis,
+        feedback: {
+          isNewAnalysis: true,
+          projects: {
+            added: newAnalysis.projects || [],
+            blocked: [],
+            updated: []
+          },
+          team: { updated: !!newAnalysis.team },
+          relations: { updated: !!newAnalysis.relations },
+          funding: { updated: !!newAnalysis.funding },
+          clients: { updated: !!newAnalysis.clients },
+          summary: {
+            totalProjectsAdded: (newAnalysis.projects || []).length,
+            totalProjectsBlocked: 0,
+            totalProjectsUpdated: 0
+          }
+        }
+      };
+    }
+
+    console.log('Merging analysis data with feedback tracking...');
+    console.log('Existing projects:', existingData.projects?.length || 0);
+    console.log('New projects:', newAnalysis.projects?.length || 0);
+
+    // Initialize feedback tracking
+    const feedback = {
+      isNewAnalysis: false,
+      projects: {
+        added: [] as any[],
+        blocked: [] as any[],
+        updated: [] as any[]
+      },
+      team: { updated: false },
+      relations: { updated: false },
+      funding: { updated: false },
+      clients: { updated: false },
+      summary: {
+        totalProjectsAdded: 0,
+        totalProjectsBlocked: 0,
+        totalProjectsUpdated: 0
+      }
+    };
+
+    // Merge projects with feedback tracking
+    const projectMergeResult = this.mergeProjectsWithFeedback(existingData.projects || [], newAnalysis.projects || []);
+    feedback.projects.added = projectMergeResult.added;
+    feedback.projects.blocked = projectMergeResult.blocked;
+    feedback.projects.updated = projectMergeResult.updated;
+    feedback.summary.totalProjectsAdded = projectMergeResult.added.length;
+    feedback.summary.totalProjectsBlocked = projectMergeResult.blocked.length;
+    feedback.summary.totalProjectsUpdated = projectMergeResult.updated.length;
+
+    // Merge other data sections
+    const mergedTeam = this.mergeTeamData(existingData.team || {}, newAnalysis.team || {});
+    feedback.team.updated = Object.keys(newAnalysis.team || {}).length > 0;
+    
+    const mergedRelations = this.mergeRelationsData(existingData.relations || {}, newAnalysis.relations || {});
+    feedback.relations.updated = Object.keys(newAnalysis.relations || {}).length > 0;
+    
+    const mergedFunding = this.mergeFundingData(existingData.funding || {}, newAnalysis.funding || {});
+    feedback.funding.updated = Object.keys(newAnalysis.funding || {}).length > 0;
+    
+    const mergedClients = this.mergeClientsData(existingData.clients || {}, newAnalysis.clients || {});
+    feedback.clients.updated = Object.keys(newAnalysis.clients || {}).length > 0;
+
+    // Use highest confidence score
+    const mergedConfidence = Math.max(existingData.confidence || 0, newAnalysis.confidence || 0);
+
+    // Combine analysis notes
+    const mergedNotes = this.mergeAnalysisNotes(existingData.analysisNotes || '', newAnalysis.analysisNotes || '');
+
+    const mergedAnalysis = {
+      projects: projectMergeResult.merged,
+      team: mergedTeam,
+      relations: mergedRelations,
+      funding: mergedFunding,
+      clients: mergedClients,
+      confidence: mergedConfidence,
+      analysisNotes: mergedNotes,
+      // Preserve original language and translated text from new analysis
+      originalLanguage: newAnalysis.originalLanguage || existingData.originalLanguage,
+      translatedText: newAnalysis.translatedText || existingData.translatedText,
+      // Keep track of merge history
+      mergeHistory: [
+        ...(existingData.mergeHistory || []),
+        {
+          analysisId: newAnalysisId,
+          mergedAt: new Date(),
+          newProjectsCount: newAnalysis.projects?.length || 0,
+          totalProjectsAfterMerge: projectMergeResult.merged.length,
+          feedback: feedback
+        }
+      ]
+    };
+
+    console.log('Merge completed with feedback. Total projects after merge:', projectMergeResult.merged.length);
+    return { mergedAnalysis, feedback };
+  }
+
+  /**
+   * Merge projects with detailed feedback tracking
+   */
+  private mergeProjectsWithFeedback(existingProjects: any[], newProjects: any[]): { merged: any[]; added: any[]; blocked: any[]; updated: any[] } {
+    const merged = [...existingProjects];
+    const added: any[] = [];
+    const blocked: any[] = [];
+    const updated: any[] = [];
+    
+    for (const newProject of newProjects) {
+      if (!newProject.name?.trim()) {
+        console.log('Skipping project without name');
+        continue;
+      }
+
+      // Enhanced duplicate detection
+      const duplicateInfo = this.findProjectDuplicate(merged, newProject);
+      
+      if (duplicateInfo.isDuplicate) {
+        console.log(`Found duplicate project: ${newProject.name} - ${duplicateInfo.reason}`);
+        
+        if (duplicateInfo.exactMatch) {
+          // Exact match - update existing project
+          const existingProject = merged[duplicateInfo.index];
+          
+          // Capture previous values for detailed tracking
+          const previousValues = {
+            status: existingProject.status,
+            description: existingProject.description,
+            size: existingProject.size,
+            location: existingProject.location,
+            useCase: existingProject.useCase
+          };
+          
+          merged[duplicateInfo.index] = {
+            ...merged[duplicateInfo.index],
+            ...newProject,
+            name: newProject.name || merged[duplicateInfo.index].name,
+            status: newProject.status || merged[duplicateInfo.index].status || 'planning'
+          };
+          
+          updated.push({
+            ...newProject,
+            reason: 'exact match - updated existing project',
+            previousStatus: previousValues.status,
+            previousDescription: previousValues.description,
+            previousSize: previousValues.size,
+            previousLocation: previousValues.location,
+            previousUseCase: previousValues.useCase
+          });
+          console.log(`Updated existing project: ${newProject.name} with status: ${newProject.status || 'planning'}`);
+        } else {
+          // Similar project detected - skip adding to prevent duplicates
+          blocked.push({
+            ...newProject,
+            reason: duplicateInfo.reason,
+            similarTo: merged[duplicateInfo.index].name
+          });
+          console.log(`Skipping similar project to prevent duplicate: ${newProject.name}`);
+          continue;
+        }
+      } else {
+        // No duplicate found - add new project
+        const projectWithStatus = {
+          ...newProject,
+          status: newProject.status || 'planning'
+        };
+        merged.push(projectWithStatus);
+        added.push(projectWithStatus);
+        console.log(`Added new project: ${newProject.name} with status: ${newProject.status || 'planning'}`);
+      }
+    }
+    
+    return { merged, added, blocked, updated };
+  }
+
+  /**
+   * Merge analysis data from existing and new analysis (legacy method for backward compatibility)
+   */
+  private mergeAnalysisData(existingData: any, newAnalysis: any, newAnalysisId: string): any {
+    if (!existingData) {
+      // No existing data, return new analysis
+      return newAnalysis;
+    }
+
+    console.log('Merging analysis data...');
+    console.log('Existing projects:', existingData.projects?.length || 0);
+    console.log('New projects:', newAnalysis.projects?.length || 0);
+
+    // Merge projects - combine and deduplicate
+    const mergedProjects = this.mergeProjects(existingData.projects || [], newAnalysis.projects || []);
+    
+    // Merge team data - prefer new data but keep existing if new is empty
+    const mergedTeam = this.mergeTeamData(existingData.team || {}, newAnalysis.team || {});
+    
+    // Merge relations data - combine arrays and deduplicate
+    const mergedRelations = this.mergeRelationsData(existingData.relations || {}, newAnalysis.relations || {});
+    
+    // Merge funding data - prefer new data but keep existing if new is empty
+    const mergedFunding = this.mergeFundingData(existingData.funding || {}, newAnalysis.funding || {});
+    
+    // Merge clients data - combine arrays and deduplicate
+    const mergedClients = this.mergeClientsData(existingData.clients || {}, newAnalysis.clients || {});
+
+    // Use highest confidence score
+    const mergedConfidence = Math.max(existingData.confidence || 0, newAnalysis.confidence || 0);
+
+    // Combine analysis notes
+    const mergedNotes = this.mergeAnalysisNotes(existingData.analysisNotes || '', newAnalysis.analysisNotes || '');
+
+    const merged = {
+      projects: mergedProjects,
+      team: mergedTeam,
+      relations: mergedRelations,
+      funding: mergedFunding,
+      clients: mergedClients,
+      confidence: mergedConfidence,
+      analysisNotes: mergedNotes,
+      // Preserve original language and translated text from new analysis
+      originalLanguage: newAnalysis.originalLanguage || existingData.originalLanguage,
+      translatedText: newAnalysis.translatedText || existingData.translatedText,
+      // Keep track of merge history
+      mergeHistory: [
+        ...(existingData.mergeHistory || []),
+        {
+          analysisId: newAnalysisId,
+          mergedAt: new Date(),
+          newProjectsCount: newAnalysis.projects?.length || 0,
+          totalProjectsAfterMerge: mergedProjects.length
+        }
+      ]
+    };
+
+    console.log('Merge completed. Total projects after merge:', mergedProjects.length);
+    return merged;
+  }
+
+  /**
+   * Merge projects arrays with enhanced duplicate detection
+   */
+  private mergeProjects(existingProjects: any[], newProjects: any[]): any[] {
+    const merged = [...existingProjects];
+    
+    for (const newProject of newProjects) {
+      if (!newProject.name?.trim()) {
+        console.log('Skipping project without name');
+        continue;
+      }
+
+      // Enhanced duplicate detection
+      const duplicateInfo = this.findProjectDuplicate(merged, newProject);
+      
+      if (duplicateInfo.isDuplicate) {
+        console.log(`Found duplicate project: ${newProject.name} - ${duplicateInfo.reason}`);
+        
+        if (duplicateInfo.exactMatch) {
+          // Exact match - update existing project
+          merged[duplicateInfo.index] = {
+            ...merged[duplicateInfo.index],
+            ...newProject,
+            name: newProject.name || merged[duplicateInfo.index].name,
+            status: newProject.status || merged[duplicateInfo.index].status || 'planning'
+          };
+          console.log(`Updated existing project: ${newProject.name} with status: ${newProject.status || 'planning'}`);
+        } else {
+          // Similar project detected - skip adding to prevent duplicates
+          console.log(`Skipping similar project to prevent duplicate: ${newProject.name}`);
+          continue;
+        }
+      } else {
+        // No duplicate found - add new project
+        merged.push({
+          ...newProject,
+          status: newProject.status || 'planning'
+        });
+        console.log(`Added new project: ${newProject.name} with status: ${newProject.status || 'planning'}`);
+      }
+    }
+    
+    return merged;
+  }
+
+  /**
+   * Enhanced project duplicate detection
+   */
+  private findProjectDuplicate(existingProjects: any[], newProject: any): { isDuplicate: boolean; exactMatch: boolean; reason: string; index: number } {
+    const newName = newProject.name?.toLowerCase().trim() || '';
+    const newDescription = newProject.description?.toLowerCase().trim() || '';
+    const newLocation = newProject.location?.toLowerCase().trim() || '';
+    const newUseCase = newProject.useCase?.toLowerCase().trim() || '';
+
+    for (let i = 0; i < existingProjects.length; i++) {
+      const existing = existingProjects[i];
+      const existingName = existing.name?.toLowerCase().trim() || '';
+      const existingDescription = existing.description?.toLowerCase().trim() || '';
+      const existingLocation = existing.location?.toLowerCase().trim() || '';
+      const existingUseCase = existing.useCase?.toLowerCase().trim() || '';
+
+      // 1. Exact name match
+      if (newName === existingName && newName.length > 0) {
+        return {
+          isDuplicate: true,
+          exactMatch: true,
+          reason: 'exact name match',
+          index: i
+        };
+      }
+
+      // 2. Exact description match (if both have descriptions)
+      if (newDescription === existingDescription && newDescription.length > 10) {
+        return {
+          isDuplicate: true,
+          exactMatch: true,
+          reason: 'exact description match',
+          index: i
+        };
+      }
+
+      // 3. Name similarity check (fuzzy matching)
+      if (this.isSimilarProjectName(newName, existingName)) {
+        return {
+          isDuplicate: true,
+          exactMatch: false,
+          reason: 'similar project name',
+          index: i
+        };
+      }
+
+      // 4. Description similarity check
+      if (newDescription.length > 10 && existingDescription.length > 10) {
+        const similarity = this.calculateDescriptionSimilarity(newDescription, existingDescription);
+        if (similarity > 0.8) { // 80% similarity threshold
+          return {
+            isDuplicate: true,
+            exactMatch: false,
+            reason: `high description similarity (${Math.round(similarity * 100)}%)`,
+            index: i
+          };
+        }
+      }
+
+      // 5. Same location + use case combination
+      if (newLocation === existingLocation && newUseCase === existingUseCase && 
+          newLocation.length > 0 && newUseCase.length > 0) {
+        // Additional check: are the names somewhat related?
+        if (this.areNamesRelated(newName, existingName)) {
+          return {
+            isDuplicate: true,
+            exactMatch: false,
+            reason: 'same location + use case with related names',
+            index: i
+          };
+        }
+      }
+    }
+
+    return {
+      isDuplicate: false,
+      exactMatch: false,
+      reason: 'no duplicate found',
+      index: -1
+    };
+  }
+
+  /**
+   * Check if project names are similar (fuzzy matching)
+   */
+  private isSimilarProjectName(name1: string, name2: string): boolean {
+    if (!name1 || !name2 || name1.length < 3 || name2.length < 3) {
+      return false;
+    }
+
+    // Remove common words for comparison
+    const commonWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
+    const cleanName1 = name1.split(' ').filter(word => !commonWords.includes(word)).join(' ');
+    const cleanName2 = name2.split(' ').filter(word => !commonWords.includes(word)).join(' ');
+
+    // Calculate similarity using simple word overlap
+    const words1 = cleanName1.split(' ');
+    const words2 = cleanName2.split(' ');
+    
+    if (words1.length === 0 || words2.length === 0) {
+      return false;
+    }
+
+    const commonWordsCount = words1.filter(word => words2.includes(word)).length;
+    const similarity = commonWordsCount / Math.max(words1.length, words2.length);
+    
+    return similarity > 0.7; // 70% word similarity
+  }
+
+  /**
+   * Calculate description similarity using word overlap
+   */
+  private calculateDescriptionSimilarity(desc1: string, desc2: string): number {
+    const words1 = new Set(desc1.split(/\s+/).filter(word => word.length > 2));
+    const words2 = new Set(desc2.split(/\s+/).filter(word => word.length > 2));
+    
+    if (words1.size === 0 || words2.size === 0) {
+      return 0;
+    }
+
+    const intersection = new Set([...words1].filter(word => words2.has(word)));
+    const union = new Set([...words1, ...words2]);
+    
+    return intersection.size / union.size; // Jaccard similarity
+  }
+
+  /**
+   * Check if project names are related (for location + use case duplicates)
+   */
+  private areNamesRelated(name1: string, name2: string): boolean {
+    if (!name1 || !name2) return false;
+    
+    // Extract key terms from names
+    const extractKeyTerms = (name: string) => {
+      return name.split(' ')
+        .filter(word => word.length > 3)
+        .map(word => word.toLowerCase())
+        .filter(word => !['building', 'complex', 'center', 'tower', 'house', 'home', 'office'].includes(word));
+    };
+
+    const terms1 = extractKeyTerms(name1);
+    const terms2 = extractKeyTerms(name2);
+    
+    if (terms1.length === 0 || terms2.length === 0) return false;
+    
+    const commonTerms = terms1.filter(term => terms2.includes(term));
+    return commonTerms.length > 0;
+  }
+
+  /**
+   * Merge team data, preferring new data but keeping existing if new is empty
+   */
+  private mergeTeamData(existingTeam: any, newTeam: any): any {
+    const merged = { ...existingTeam };
+    
+    // Update with new team data if it has content
+    if (newTeam.teamSize?.trim()) merged.teamSize = newTeam.teamSize;
+    if (newTeam.numberOfPeople && newTeam.numberOfPeople > 0) merged.numberOfPeople = newTeam.numberOfPeople;
+    
+    // Merge specific architects arrays
+    if (newTeam.specificArchitects?.length > 0) {
+      const existingArchitects = merged.specificArchitects || [];
+      const combined = [...existingArchitects, ...newTeam.specificArchitects];
+      merged.specificArchitects = [...new Set(combined.map(arch => arch.toLowerCase().trim()))]
+        .map(arch => existingArchitects.find(existing => existing.toLowerCase().trim() === arch) || arch);
+    }
+    
+    // Merge roles arrays
+    if (newTeam.roles?.length > 0) {
+      const existingRoles = merged.roles || [];
+      const combined = [...existingRoles, ...newTeam.roles];
+      merged.roles = [...new Set(combined.map(role => role.toLowerCase().trim()))]
+        .map(role => existingRoles.find(existing => existing.toLowerCase().trim() === role) || role);
+    }
+    
+    return merged;
+  }
+
+  /**
+   * Merge relations data, combining arrays and removing duplicates
+   */
+  private mergeRelationsData(existingRelations: any, newRelations: any): any {
+    const merged = { ...existingRelations };
+    
+    // Merge construction companies
+    if (newRelations.constructionCompanies?.length > 0) {
+      const existing = merged.constructionCompanies || [];
+      const combined = [...existing, ...newRelations.constructionCompanies];
+      merged.constructionCompanies = [...new Set(combined.map(comp => comp.toLowerCase().trim()))]
+        .map(comp => existing.find(existing => existing.toLowerCase().trim() === comp) || comp);
+    }
+    
+    // Merge other architecture offices
+    if (newRelations.otherArchOffices?.length > 0) {
+      const existing = merged.otherArchOffices || [];
+      const combined = [...existing, ...newRelations.otherArchOffices];
+      merged.otherArchOffices = [...new Set(combined.map(office => office.toLowerCase().trim()))]
+        .map(office => existing.find(existing => existing.toLowerCase().trim() === office) || office);
+    }
+    
+    // Merge partners
+    if (newRelations.partners?.length > 0) {
+      const existing = merged.partners || [];
+      const combined = [...existing, ...newRelations.partners];
+      merged.partners = [...new Set(combined.map(partner => partner.toLowerCase().trim()))]
+        .map(partner => existing.find(existing => existing.toLowerCase().trim() === partner) || partner);
+    }
+    
+    // Merge collaborators
+    if (newRelations.collaborators?.length > 0) {
+      const existing = merged.collaborators || [];
+      const combined = [...existing, ...newRelations.collaborators];
+      merged.collaborators = [...new Set(combined.map(collab => collab.toLowerCase().trim()))]
+        .map(collab => existing.find(existing => existing.toLowerCase().trim() === collab) || collab);
+    }
+    
+    return merged;
+  }
+
+  /**
+   * Merge funding data, preferring new data but keeping existing if new is empty
+   */
+  private mergeFundingData(existingFunding: any, newFunding: any): any {
+    const merged = { ...existingFunding };
+    
+    if (newFunding.budget?.trim()) merged.budget = newFunding.budget;
+    if (newFunding.financialInfo?.trim()) merged.financialInfo = newFunding.financialInfo;
+    if (newFunding.investmentDetails?.trim()) merged.investmentDetails = newFunding.investmentDetails;
+    
+    // Merge funding sources
+    if (newFunding.fundingSources?.length > 0) {
+      const existing = merged.fundingSources || [];
+      const combined = [...existing, ...newFunding.fundingSources];
+      merged.fundingSources = [...new Set(combined.map(source => source.toLowerCase().trim()))]
+        .map(source => existing.find(existing => existing.toLowerCase().trim() === source) || source);
+    }
+    
+    return merged;
+  }
+
+  /**
+   * Merge clients data, combining arrays and removing duplicates
+   */
+  private mergeClientsData(existingClients: any, newClients: any): any {
+    const merged = { ...existingClients };
+    
+    // Merge past clients
+    if (newClients.pastClients?.length > 0) {
+      const existing = merged.pastClients || [];
+      const combined = [...existing, ...newClients.pastClients];
+      merged.pastClients = [...new Set(combined.map(client => client.toLowerCase().trim()))]
+        .map(client => existing.find(existing => existing.toLowerCase().trim() === client) || client);
+    }
+    
+    // Merge present clients
+    if (newClients.presentClients?.length > 0) {
+      const existing = merged.presentClients || [];
+      const combined = [...existing, ...newClients.presentClients];
+      merged.presentClients = [...new Set(combined.map(client => client.toLowerCase().trim()))]
+        .map(client => existing.find(existing => existing.toLowerCase().trim() === client) || client);
+    }
+    
+    // Merge client types
+    if (newClients.clientTypes?.length > 0) {
+      const existing = merged.clientTypes || [];
+      const combined = [...existing, ...newClients.clientTypes];
+      merged.clientTypes = [...new Set(combined.map(type => type.toLowerCase().trim()))]
+        .map(type => existing.find(existing => existing.toLowerCase().trim() === type) || type);
+    }
+    
+    // Merge client industries
+    if (newClients.clientIndustries?.length > 0) {
+      const existing = merged.clientIndustries || [];
+      const combined = [...existing, ...newClients.clientIndustries];
+      merged.clientIndustries = [...new Set(combined.map(industry => industry.toLowerCase().trim()))]
+        .map(industry => existing.find(existing => existing.toLowerCase().trim() === industry) || industry);
+    }
+    
+    return merged;
+  }
+
+  /**
+   * Merge analysis notes
+   */
+  private mergeAnalysisNotes(existingNotes: string, newNotes: string): string {
+    if (!existingNotes) return newNotes;
+    if (!newNotes) return existingNotes;
+    
+    // Combine notes with separator if both exist
+    return `${existingNotes}\n\n--- New Analysis ---\n${newNotes}`;
+  }
+
+  /**
+   * Save office analysis data with merging and return feedback
+   */
+  async saveOfficeAnalysis(officeId: string, analysis: Omit<OfficeAnalysis, 'id'>, country?: string): Promise<{ success: boolean; feedback?: any }> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const analysisId = `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Save as same level as cities: {country}/analyses/{officeId}
+      const analysisRef = this.db
+        .collection(countryCollection)
+        .doc('analyses')
+        .collection('offices')
+        .doc(officeId);
+
+      // Get existing analysis data
+      const existingDoc = await analysisRef.get();
+      let existingData: any = null;
+      
+      if (existingDoc.exists) {
+        existingData = existingDoc.data();
+        console.log(`Found existing analysis for office ${officeId}, merging data...`);
+      } else {
+        console.log(`No existing analysis found for office ${officeId}, creating new analysis...`);
+      }
+
+      // Merge the analysis data with feedback tracking
+      const mergeResult = this.mergeAnalysisDataWithFeedback(existingData, analysis, analysisId);
+
+      const analysisData = {
+        ...mergeResult.mergedAnalysis,
+        id: analysisId,
+        officeId: officeId,
+        country: countryCollection,
+        analyzedAt: admin.firestore.Timestamp.fromDate(analysis.analyzedAt),
+        lastUpdated: admin.firestore.Timestamp.now()
+      };
+
+      await analysisRef.set(analysisData);
+      console.log(`Saved merged analysis for office ${officeId} to ${countryCollection}/analyses/offices/${officeId}: ${analysisId}`);
+
+      return {
+        success: true,
+        feedback: mergeResult.feedback
+      };
+    } catch (error) {
+      console.error('Error saving office analysis:', error);
+      return {
+        success: false,
+        feedback: {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      };
+    }
+  }
+
+  /**
+   * Get latest analysis for an office
+   */
+  async getLatestOfficeAnalysis(officeId: string, country?: string): Promise<OfficeAnalysis | null> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const analysisRef = this.db
+        .collection(countryCollection)
+        .doc('analyses')
+        .collection('offices')
+        .doc(officeId);
+      
+      const analysisDoc = await analysisRef.get();
+
+      if (!analysisDoc.exists) {
+        return null;
+      }
+
+      const data = analysisDoc.data();
+      
+      return {
+        ...data,
+        analyzedAt: data.analyzedAt?.toDate()
+      } as OfficeAnalysis;
+    } catch (error) {
+      console.error('Error getting latest office analysis:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all analyses for an office
+   */
+  async getAllOfficeAnalyses(officeId: string, country?: string): Promise<OfficeAnalysis[]> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const analysisRef = this.db
+        .collection(countryCollection)
+        .doc('analyses')
+        .collection('offices')
+        .doc(officeId);
+      
+      const analysisDoc = await analysisRef.get();
+
+      if (!analysisDoc.exists) {
+        return [];
+      }
+
+      const data = analysisDoc.data();
+      return [{
+        ...data,
+        analyzedAt: data.analyzedAt?.toDate()
+      } as OfficeAnalysis];
+    } catch (error) {
+      console.error('Error getting all office analyses:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete analysis
+   */
+  async deleteOfficeAnalysis(officeId: string, analysisId: string, country?: string): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const analysisRef = this.db
+        .collection(countryCollection)
+        .doc('analyses')
+        .collection('offices')
+        .doc(officeId);
+
+      await analysisRef.delete();
+      console.log(`Deleted analysis for office ${officeId} from ${countryCollection}/analyses/offices/${officeId}`);
+    } catch (error) {
+      console.error('Error deleting office analysis:', error);
+      throw error;
+    }
+  }
+
+  // **CLICK TRACKING METHODS**
+
+  /**
+   * Save website click data
+   */
+  async saveWebsiteClick(click: WebsiteClick, country?: string): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      
+      // Save individual click under scrape_timing folder: {country}/scrape_timing/web_tracking/clicks/{clickId}
+      const clickRef = this.db
+        .collection(countryCollection)
+        .doc('scrape_timing')
+        .collection('web_tracking')
+        .doc('clicks')
+        .collection('clicks')
+        .doc(click.id);
+
+      const clickData = {
+        ...click,
+        clickedAt: admin.firestore.Timestamp.fromDate(click.clickedAt)
+      };
+
+      await clickRef.set(clickData);
+
+      // Update office click statistics
+      await this.updateOfficeClickStats(click.officeId, click.officeName, click, country);
+
+      console.log(`Saved website click for office ${click.officeId}: ${click.website}`);
+    } catch (error) {
+      console.error('Error saving website click:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update office click statistics
+   */
+  private async updateOfficeClickStats(officeId: string, officeName: string, click: WebsiteClick, country?: string): Promise<void> {
+    try {
+      const countryCollection = country || 'latvia';
+      const statsRef = this.db
+        .collection(countryCollection)
+        .doc('scrape_timing')
+        .collection('web_tracking')
+        .doc('office_stats')
+        .collection('office_stats')
+        .doc(officeId);
+
+      const statsDoc = await statsRef.get();
+      
+      if (statsDoc.exists) {
+        // Update existing stats
+        const currentStats = statsDoc.data();
+        const clickHistory = currentStats?.clickHistory || [];
+        
+        // Add new click to history (keep last 100 clicks)
+        const updatedHistory = [click, ...clickHistory].slice(0, 100);
+        
+        // Count unique sessions
+        const uniqueSessions = new Set(updatedHistory.map(c => c.sessionId)).size;
+        
+        await statsRef.update({
+          totalClicks: admin.firestore.FieldValue.increment(1),
+          uniqueSessions: uniqueSessions,
+          lastClickedAt: admin.firestore.Timestamp.fromDate(click.clickedAt),
+          clickHistory: updatedHistory.map(c => ({
+            ...c,
+            clickedAt: admin.firestore.Timestamp.fromDate(c.clickedAt)
+          }))
+        });
+      } else {
+        // Create new stats
+        await statsRef.set({
+          officeId,
+          officeName,
+          totalClicks: 1,
+          uniqueSessions: 1,
+          lastClickedAt: admin.firestore.Timestamp.fromDate(click.clickedAt),
+          clickHistory: [{
+            ...click,
+            clickedAt: admin.firestore.Timestamp.fromDate(click.clickedAt)
+          }]
+        });
+      }
+    } catch (error) {
+      console.error('Error updating office click stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get click tracking statistics for an office
+   */
+  async getClickTrackingStats(officeId: string, country?: string): Promise<ClickTrackingStats | null> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const statsRef = this.db
+        .collection(countryCollection)
+        .doc('scrape_timing')
+        .collection('web_tracking')
+        .doc('office_stats')
+        .collection('office_stats')
+        .doc(officeId);
+
+      const statsDoc = await statsRef.get();
+      
+      if (!statsDoc.exists) {
+        return null;
+      }
+
+      const data = statsDoc.data();
+      return {
+        officeId: data?.officeId || officeId,
+        officeName: data?.officeName || '',
+        totalClicks: data?.totalClicks || 0,
+        uniqueSessions: data?.uniqueSessions || 0,
+        lastClickedAt: data?.lastClickedAt?.toDate() || new Date(),
+        clickHistory: (data?.clickHistory || []).map((click: any) => ({
+          ...click,
+          clickedAt: click.clickedAt?.toDate() || new Date()
+        }))
+      };
+    } catch (error) {
+      console.error('Error getting click tracking stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all click tracking statistics
+   */
+  async getAllClickTrackingStats(country?: string): Promise<ClickTrackingStats[]> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const statsSnapshot = await this.db
+        .collection(countryCollection)
+        .doc('scrape_timing')
+        .collection('web_tracking')
+        .doc('office_stats')
+        .collection('office_stats')
+        .orderBy('totalClicks', 'desc')
+        .get();
+
+      const stats: ClickTrackingStats[] = [];
+      statsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        stats.push({
+          officeId: data.officeId,
+          officeName: data.officeName,
+          totalClicks: data.totalClicks || 0,
+          uniqueSessions: data.uniqueSessions || 0,
+          lastClickedAt: data.lastClickedAt?.toDate() || new Date(),
+          clickHistory: (data.clickHistory || []).map((click: any) => ({
+            ...click,
+            clickedAt: click.clickedAt?.toDate() || new Date()
+          }))
+        });
+      });
+
+      return stats;
+    } catch (error) {
+      console.error('Error getting all click tracking stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get recent clicks for an office
+   */
+  async getRecentClicksForOffice(officeId: string, limit: number = 10, country?: string): Promise<WebsiteClick[]> {
+    if (!this.initialized) {
+      throw new Error('Firebase not initialized');
+    }
+
+    try {
+      const countryCollection = country || 'latvia';
+      const clicksSnapshot = await this.db
+        .collection(countryCollection)
+        .doc('scrape_timing')
+        .collection('web_tracking')
+        .doc('clicks')
+        .collection('clicks')
+        .where('officeId', '==', officeId)
+        .orderBy('clickedAt', 'desc')
+        .limit(limit)
+        .get();
+
+      const clicks: WebsiteClick[] = [];
+      clicksSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        clicks.push({
+          ...data,
+          clickedAt: data.clickedAt?.toDate() || new Date()
+        } as WebsiteClick);
+      });
+
+      return clicks;
+    } catch (error) {
+      console.error('Error getting recent clicks for office:', error);
       throw error;
     }
   }

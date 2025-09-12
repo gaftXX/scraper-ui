@@ -91,6 +91,10 @@ export default function ScraperInterface() {
   const [showInlook, setShowInlook] = useState(false);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
   const [resetSection2Focus, setResetSection2Focus] = useState<number>(0);
+  const [showInputState, setShowInputState] = useState(false);
+  const [inputStateOffice, setInputStateOffice] = useState<any>(null);
+  const [inlookDisabled, setInlookDisabled] = useState(false);
+  const [inputAnalysisResult, setInputAnalysisResult] = useState<any>(null);
   
   // Use a ref to store the latest config to avoid stale closure issues
   const configRef = useRef<ScraperConfig>(config);
@@ -287,6 +291,20 @@ export default function ScraperInterface() {
     if (section2Ref.current && section2Ref.current.handleInlookFocusActivate) {
       section2Ref.current.handleInlookFocusActivate(selectedOffice);
     }
+  };
+
+  const handleInputStateActivate = (selectedOffice: any) => {
+    setInputStateOffice(selectedOffice);
+    setShowInputState(true);
+  };
+
+  const resetInputState = () => {
+    setShowInputState(false);
+    setInputStateOffice(null);
+  };
+
+  const toggleInlookDisabled = () => {
+    setInlookDisabled(prev => !prev);
   };
 
   // Helper function to get intensity level from current maxResults and searchRadius
@@ -654,6 +672,13 @@ export default function ScraperInterface() {
             inlookState={inlookState}
             showInlook={showInlook}
             resetInlookState={() => setShowInlook(false)}
+            showInputState={showInputState}
+            inputStateOffice={inputStateOffice}
+            resetInputState={resetInputState}
+            inlookDisabled={inlookDisabled}
+            inputAnalysisResult={inputAnalysisResult}
+            setInputAnalysisResult={setInputAnalysisResult}
+            toggleInlookDisabled={toggleInlookDisabled}
           />
         </div>
 
@@ -676,6 +701,7 @@ export default function ScraperInterface() {
             resetFocusTrigger={resetSection2Focus}
             setInlookState={setInlookState}
             setShowInlook={setShowInlook}
+            inlookDisabled={inlookDisabled}
           />
         </div>
 
@@ -689,6 +715,8 @@ export default function ScraperInterface() {
             resetCompendiumState={resetCompendiumState}
             config={config}
             onInlookFocusActivate={handleInlookFocusActivate}
+            onInputStateActivate={handleInputStateActivate}
+            inlookDisabled={inlookDisabled}
           />
         </div>
       </div>

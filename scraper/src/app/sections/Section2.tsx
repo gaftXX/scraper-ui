@@ -22,6 +22,7 @@ interface Section2Props {
   resetFocusTrigger: number;
   setInlookState: (state: InlookState | ((prev: InlookState) => InlookState)) => void;
   setShowInlook: (show: boolean) => void;
+  inlookDisabled: boolean;
 }
 
 // City lists are now handled by the centralized country configuration
@@ -41,7 +42,8 @@ const Section2 = forwardRef<any, Section2Props>(({
   onSystemClick,
   resetFocusTrigger,
   setInlookState,
-  setShowInlook
+  setShowInlook,
+  inlookDisabled
 }, ref) => {
   // Get cities based on selected country using centralized configuration
   const getCitiesForCountry = () => {
@@ -284,7 +286,7 @@ const Section2 = forwardRef<any, Section2Props>(({
   };
 
   return (
-    <div className="col-span-1 h-full">
+    <div className="col-span-1 h-full relative z-[9999]">
       <div className="h-full flex flex-col p-4 items-center justify-center relative">
         
         {/* Vertical line in the middle */}

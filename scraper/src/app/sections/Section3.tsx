@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getCitiesByCountry, getCountryById } from '../countries';
+import { createTrackedLink } from '../utils/clickTracker';
 
 interface Section3Props {
   showCompendium: boolean;
@@ -11,6 +12,8 @@ interface Section3Props {
   resetCompendiumState?: () => void; // Add reset function prop
   config?: any; // Add config prop to access selected country
   onInlookFocusActivate?: (selectedOffice: FirestoreOffice) => void; // Add inlook focus activation prop
+  onInputStateActivate?: (selectedOffice: FirestoreOffice) => void; // Add input state activation prop
+  inlookDisabled: boolean; // Add inlook disabled prop
 }
 
 interface FirestoreOffice {
@@ -77,7 +80,7 @@ const cleanAddressDisplay = (address: string, city?: string): string => {
   return cleanedAddress;
 };
 
-export default function Section3({ showCompendium, results, formatElapsedTime, progress, resetCompendiumState, config, onInlookFocusActivate }: Section3Props) {
+export default function Section3({ showCompendium, results, formatElapsedTime, progress, resetCompendiumState, config, onInlookFocusActivate, onInputStateActivate, inlookDisabled }: Section3Props) {
   const [showCities, setShowCities] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
   const [showData, setShowData] = useState(false);
@@ -95,6 +98,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
   const [savingOfficeId, setSavingOfficeId] = useState<string | null>(null); // Track which office is being saved
   const [editModeEnabled, setEditModeEnabled] = useState<boolean>(false); // Track if edit mode is enabled
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null); // Track which row is selected
+  const [showOfficePopup, setShowOfficePopup] = useState<boolean>(false); // Track if office popup is shown
 
   // Debug logging
   console.log('Section3 props:', { showCompendium, results: !!results, resultsLength: results?.results?.length });
@@ -171,16 +175,29 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
     }
   }, [firestoreData, progress?.status]); // Removed previousData from dependencies
 
-  // Handle keyboard events for inlook focus mode
+  // Handle keyboard events for inlook focus mode and office popup
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
       // Activate inlook focus mode when Shift+S is pressed and a row is selected
-      if (event.key.toLowerCase() === 's' && event.shiftKey && selectedRowIndex !== null && showData) {
+      // Only if inlook scraper is not disabled
+      if (event.key.toLowerCase() === 's' && event.shiftKey && selectedRowIndex !== null && showData && !inlookDisabled) {
         event.preventDefault();
         const selectedOffice = filteredData[selectedRowIndex];
         if (selectedOffice && onInlookFocusActivate) {
           onInlookFocusActivate(selectedOffice);
         }
+      }
+      
+      // Show office popup when Enter is pressed and a row is selected
+      if (event.key === 'Enter' && selectedRowIndex !== null && showData) {
+        event.preventDefault();
+        setShowOfficePopup(true);
+      }
+      
+      // Close office popup when Escape is pressed
+      if (event.key === 'Escape' && showOfficePopup) {
+        event.preventDefault();
+        setShowOfficePopup(false);
       }
     };
 
@@ -188,7 +205,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, [selectedRowIndex, filteredData, showData, onInlookFocusActivate]);
+  }, [selectedRowIndex, filteredData, showData, onInlookFocusActivate, inlookDisabled, showOfficePopup]);
 
   const fetchFirestoreData = async () => {
     setLoading(true);
@@ -507,7 +524,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
 
   return (
     <div className="col-span-2 h-full">
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col relative">
         {showCompendium && (
           <div className="flex-1 overflow-hidden">
             {/* Navigation Buttons */}
@@ -789,16 +806,16 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                               isNewOffice ? 'text-black' : 'text-[#ffffff]'
                             }`}>
                               {office.website ? (
-                                <a
-                                  href={office.website.startsWith('http') ? office.website : `https://${office.website}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`cursor-pointer ${
-                                    isNewOffice ? 'text-black' : 'text-[#ffffff]'
-                                  }`}
-                                >
-                                  {office.website.replace(/^https?:\/\//, '')}
-                                </a>
+                                createTrackedLink(
+                                  office.website.startsWith('http') ? office.website : `https://${office.website}`,
+                                  office.website.replace(/^https?:\/\//, ''),
+                                  {
+                                    officeId: office.uniqueId || `${office.name}-${office.address}`,
+                                    officeName: office.name,
+                                    website: office.website
+                                  },
+                                  `cursor-pointer ${isNewOffice ? 'text-black' : 'text-[#ffffff]'}`
+                                )
                               ) : '-'}
                             </td>
                           </tr>
@@ -819,6 +836,99 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
         {!showCompendium && (
         <div className="flex-1 flex items-center justify-center">
         </div>
+        )}
+        
+        {/* Inlook Popup */}
+        {showOfficePopup && selectedRowIndex !== null && filteredData[selectedRowIndex] && (
+          <div className="absolute bottom-5 left-1/2 transform -translate-x-1/2 h-1/3 bg-[#393837] p-4 overflow-y-auto z-50 w-[95%]">
+              
+              <div className="grid grid-cols-3 gap-8 text-sm w-full">
+                <div>
+                  <div className="text-white font-medium">{filteredData[selectedRowIndex].name}</div>
+                </div>
+                
+                {filteredData[selectedRowIndex].address && (
+                  <div className="col-span-3">
+                    <div className="text-white">{filteredData[selectedRowIndex].address}</div>
+                  </div>
+                )}
+                
+                {filteredData[selectedRowIndex].website && (
+                  <div>
+                    {createTrackedLink(
+                      filteredData[selectedRowIndex].website.startsWith('http') ? filteredData[selectedRowIndex].website : `https://${filteredData[selectedRowIndex].website}`,
+                      filteredData[selectedRowIndex].website.replace(/^https?:\/\//, ''),
+                      {
+                        officeId: filteredData[selectedRowIndex].uniqueId || `${filteredData[selectedRowIndex].name}-${filteredData[selectedRowIndex].address}`,
+                        officeName: filteredData[selectedRowIndex].name,
+                        website: filteredData[selectedRowIndex].website
+                      },
+                      "text-white hover:text-gray-300"
+                    )}
+                  </div>
+                )}
+                
+                {filteredData[selectedRowIndex].phone && (
+                  <div>
+                    <div className="text-white">{filteredData[selectedRowIndex].phone}</div>
+                  </div>
+                )}
+                
+                {filteredData[selectedRowIndex].email && (
+                  <div>
+                    <div className="text-white">{filteredData[selectedRowIndex].email}</div>
+                  </div>
+                )}
+                
+                {filteredData[selectedRowIndex].rating && (
+                  <div>
+                    <div className="text-white">{filteredData[selectedRowIndex].rating}/5</div>
+                  </div>
+                )}
+                
+                {filteredData[selectedRowIndex].reviews && (
+                  <div>
+                    <div className="text-white">{filteredData[selectedRowIndex].reviews}</div>
+                  </div>
+                )}
+                
+                {filteredData[selectedRowIndex].hours && (
+                  <div>
+                    <div className="text-white">{filteredData[selectedRowIndex].hours}</div>
+                  </div>
+                )}
+                
+                {filteredData[selectedRowIndex].description && (
+                  <div className="col-span-3">
+                    <div className="text-white">{filteredData[selectedRowIndex].description}</div>
+                  </div>
+                )}
+                
+                {filteredData[selectedRowIndex].businessLabels && filteredData[selectedRowIndex].businessLabels.length > 0 && (
+                  <div className="col-span-3">
+                    <div className="text-white">{filteredData[selectedRowIndex].businessLabels.join(', ')}</div>
+                  </div>
+                )}
+            </div>
+            
+            {/* Input Data Button - Absolute Bottom Right */}
+            <div className="absolute bottom-0 right-0 p-4">
+              <button
+                onClick={() => {
+                  if (onInputStateActivate && selectedRowIndex !== null) {
+                    onInputStateActivate(filteredData[selectedRowIndex]);
+                  }
+                }}
+                className="text-white text-sm hover:text-gray-300 transition-colors cursor-pointer"
+                style={{
+                  border: 'none',
+                  backgroundColor: 'transparent'
+                }}
+              >
+                INPUT DATA
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

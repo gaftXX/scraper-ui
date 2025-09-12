@@ -1,7 +1,214 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { InlookState } from '../inlookTypes';
+import { createTrackedLink } from '../utils/clickTracker';
+
+// Component for displaying updated project details with dropdown
+const UpdatedProjectDetails: React.FC<{ project: any }> = ({ project }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const getUpdateDetails = (project: any) => {
+    const details = [];
+    
+    // Status change
+    if (project.previousStatus !== project.status) {
+      details.push({
+        field: 'Status',
+        from: project.previousStatus || 'planning',
+        to: project.status || 'planning',
+        reason: 'Status updated from new analysis'
+      });
+    }
+
+    // Other field updates (if we have more detailed tracking)
+    if (project.previousDescription && project.previousDescription !== project.description) {
+      details.push({
+        field: 'Description',
+        from: project.previousDescription.substring(0, 100) + '...',
+        to: (project.description || '').substring(0, 100) + '...',
+        reason: 'Description updated with new information'
+      });
+    }
+
+    if (project.previousSize && project.previousSize !== project.size) {
+      details.push({
+        field: 'Size',
+        from: project.previousSize,
+        to: project.size,
+        reason: 'Size information updated'
+      });
+    }
+
+    if (project.previousLocation && project.previousLocation !== project.location) {
+      details.push({
+        field: 'Location',
+        from: project.previousLocation,
+        to: project.location,
+        reason: 'Location information updated'
+      });
+    }
+
+    if (project.previousUseCase && project.previousUseCase !== project.useCase) {
+      details.push({
+        field: 'Use Case',
+        from: project.previousUseCase,
+        to: project.useCase,
+        reason: 'Use case classification updated'
+      });
+    }
+
+    // If no specific field changes, show general update reason
+    if (details.length === 0) {
+      details.push({
+        field: 'Project Information',
+        from: 'Previous version',
+        to: 'Updated version',
+        reason: project.reason || 'Project information updated from new analysis'
+      });
+    }
+
+    return details;
+  };
+
+  const updateDetails = getUpdateDetails(project);
+
+  return (
+    <div className="text-xs text-[#ffffff] p-2">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <span>
+          • {project.name}: {project.previousStatus || 'planning'} → {project.status || 'planning'}
+        </span>
+        <span className="text-[#ffffff] ml-2">
+          {isExpanded ? '▼' : '▶'}
+        </span>
+      </div>
+      
+      {isExpanded && (
+        <div className="mt-2 pl-2 border-l-2 border-[#ffffff]">
+          <div className="text-xs text-[#ffffff] font-medium mb-1">
+            Update Details:
+          </div>
+          {updateDetails.map((detail, idx) => (
+            <div key={idx} className="mb-2 text-xs">
+              <div className="text-[#ffffff] font-medium">{detail.field}:</div>
+              <div className="text-[#ffffff] ml-2">
+                <div>From: <span className="text-[#ffffff]">{detail.from}</span></div>
+                <div>To: <span className="text-[#ffffff]">{detail.to}</span></div>
+                <div className="text-[#ffffff] italic">Reason: {detail.reason}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Component for displaying blocked project details with dropdown
+const BlockedProjectDetails: React.FC<{ project: any }> = ({ project }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const getBlockReason = (reason: string) => {
+    const reasons = {
+      'exact project name match': 'This project has the exact same name as an existing project',
+      'exact description match': 'This project has the exact same description as an existing project',
+      'similar project name': 'This project name is too similar to an existing project name',
+      'similar description': 'This project description is too similar to an existing project description',
+      'same location + use case with related names': 'This project is in the same location with the same use case and has a related name to an existing project'
+    };
+    return reasons[reason as keyof typeof reasons] || reason;
+  };
+
+  return (
+    <div className="text-xs text-[#ffffff] p-2">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <span>
+          • {project.name} - {project.reason}
+        </span>
+        <span className="text-[#ffffff] ml-2">
+          {isExpanded ? '▼' : '▶'}
+        </span>
+      </div>
+      
+      {isExpanded && (
+        <div className="mt-2 pl-2 border-l-2 border-[#ffffff]">
+          <div className="text-xs text-[#ffffff] font-medium mb-1">
+            Block Reason Details:
+          </div>
+          <div className="text-xs text-[#ffffff] mb-2">
+            {getBlockReason(project.reason)}
+          </div>
+          
+          {project.similarTo && (
+            <div className="text-xs text-[#ffffff] mb-1">
+              Similar to existing project:
+            </div>
+          )}
+          {project.similarTo && (
+            <div className="text-xs text-[#ffffff] ml-2">
+              "{project.similarTo}"
+            </div>
+          )}
+          
+          <div className="text-xs text-[#ffffff] italic mt-2">
+            This project was blocked to prevent duplicate entries in the database.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Component for displaying added project details with dropdown
+const AddedProjectDetails: React.FC<{ project: any }> = ({ project }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="text-xs text-[#ffffff] p-2">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <span>
+          • {project.name} ({project.status || 'planning'})
+        </span>
+        <span className="text-[#ffffff] ml-2">
+          {isExpanded ? '▼' : '▶'}
+        </span>
+      </div>
+      
+      {isExpanded && (
+        <div className="mt-2 pl-2 border-l-2 border-[#ffffff]">
+          <div className="text-xs text-[#ffffff] font-medium mb-1">
+            Project Details:
+          </div>
+          <div className="text-xs text-[#ffffff] space-y-1">
+            <div><span className="text-[#ffffff]">Status:</span> {project.status || 'planning'}</div>
+            {project.location && <div><span className="text-[#ffffff]">Location:</span> {project.location}</div>}
+            {project.size && <div><span className="text-[#ffffff]">Size:</span> {project.size}</div>}
+            {project.useCase && <div><span className="text-[#ffffff]">Use Case:</span> {project.useCase}</div>}
+            {project.description && (
+              <div>
+                <span className="text-[#ffffff]">Description:</span> 
+                <div className="text-[#ffffff] ml-2 text-xs">{project.description.substring(0, 150)}{project.description.length > 150 ? '...' : ''}</div>
+              </div>
+            )}
+          </div>
+          <div className="text-xs text-[#ffffff] italic mt-2">
+            This project was successfully added as a new entry.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface ScrapingProgress {
   currentCity: string;
@@ -30,6 +237,37 @@ interface ScrapingResults {
   scrapedCities?: string[];
 }
 
+interface InputAnalysisResult {
+  projects: any[];
+  team: any;
+  relations: any;
+  funding: any;
+  clients: any;
+  originalLanguage?: string;
+  translatedText?: string;
+  analysisId: string;
+  timestamp: string;
+  firebaseSaveSuccess?: boolean;
+  firebaseError?: string;
+  feedback?: {
+    isNewAnalysis?: boolean;
+    projects?: {
+      added: any[];
+      blocked: any[];
+      updated: any[];
+    };
+    team?: { updated: boolean };
+    relations?: { updated: boolean };
+    funding?: { updated: boolean };
+    clients?: { updated: boolean };
+    summary?: {
+      totalProjectsAdded: number;
+      totalProjectsBlocked: number;
+      totalProjectsUpdated: number;
+    };
+  };
+}
+
 interface Section1Props {
   progress: ScrapingProgress;
   results: ScrapingResults | null;
@@ -48,6 +286,13 @@ interface Section1Props {
   inlookState: InlookState;
   showInlook: boolean;
   resetInlookState: () => void;
+  inlookDisabled: boolean;
+  toggleInlookDisabled: () => void;
+  showInputState: boolean;
+  inputStateOffice: any;
+  resetInputState: () => void;
+  inputAnalysisResult: InputAnalysisResult | null;
+  setInputAnalysisResult: (result: InputAnalysisResult | null) => void;
 }
 
 export default function Section1({
@@ -67,7 +312,14 @@ export default function Section1({
   handleCountryChange,
   inlookState,
   showInlook,
-  resetInlookState
+  resetInlookState,
+  inlookDisabled,
+  toggleInlookDisabled,
+  showInputState,
+  inputStateOffice,
+  resetInputState,
+  inputAnalysisResult,
+  setInputAnalysisResult
 }: Section1Props) {
   return (
     <div className="col-span-2 h-screen">
@@ -119,6 +371,13 @@ export default function Section1({
         }
         .terminal-output pre {
           color: #ffffff !important;
+        }
+        .analysis-results-container {
+          scrollbar-width: none;  /* Firefox */
+          -ms-overflow-style: none;  /* Internet Explorer 10+ */
+        }
+        .analysis-results-container::-webkit-scrollbar {
+          display: none;  /* WebKit */
         }
       `}</style>
       <div className="h-full flex flex-col">
@@ -431,9 +690,412 @@ export default function Section1({
                 <h3 className="text-md font-medium">Region Selection</h3>
               </div>
             </div>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-4 text-[#ffffff]">
+                <button
+                  onClick={toggleInlookDisabled}
+                  className={`text-sm font-medium transition-all cursor-pointer ${
+                    inlookDisabled
+                      ? 'text-[#ffffff] opacity-100'
+                      : 'text-[#ffffff] opacity-40 hover:opacity-60'
+                  }`}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  {inlookDisabled ? 'DISABLED' : 'ENABLED'}
+                </button>
+              </div>
+              <div className="text-[#ffffff]">
+                <h3 className="text-md font-medium">Inlook Scraper</h3>
+              </div>
+            </div>
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center text-[#ffffff]">
               </div>
+            </div>
+          </div>
+        ) : showInputState ? (
+          // Input State UI
+          <div className="h-full flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-medium text-[#ffffff]">INPUT DATA</h2>
+              <button
+                onClick={resetInputState}
+                className="px-3 py-1 bg-[#393837] text-sm"
+              >
+                CLOSE
+              </button>
+            </div>
+            
+            {/* Office Information Header */}
+            {inputStateOffice && (
+              <div className="mb-6 p-4 bg-[#393837] rounded-lg">
+                <h3 className="text-lg font-medium text-[#ffffff] mb-2">
+                  {inputStateOffice.name}
+                </h3>
+                <div className="text-sm text-[#ffffff] space-y-1">
+                  {inputStateOffice.address && (
+                    <div>Address: {inputStateOffice.address}</div>
+                  )}
+                  {inputStateOffice.phone && (
+                    <div>Phone: {inputStateOffice.phone}</div>
+                  )}
+                  {inputStateOffice.website && (
+                    <div>Website: {inputStateOffice.website}</div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Large Text Input Area */}
+            <div className="flex-1 flex flex-col">
+              <div className="mb-2">
+                <label className="text-sm text-[#ffffff] font-medium">
+                  ARCHITECTURE OFFICE DATA
+                </label>
+                <p className="text-xs text-gray-400 mt-1">
+                  Enter detailed information about this architecture office. The system will automatically analyze and categorize your input into Projects, Team, Relations, Funding, and Clients. You can input text in Spanish or English.
+                </p>
+              </div>
+              <textarea
+                id="office-data-input"
+                className="flex-1 w-full p-4 bg-[#2d3748] text-[#ffffff] border border-gray-600 rounded-lg resize-none focus:outline-none focus:border-blue-500"
+                placeholder="Enter detailed information about this architecture office..."
+                style={{
+                  fontFamily: 'Monaco, Menlo, Ubuntu Mono, Consolas, source-code-pro, monospace',
+                  fontSize: '14px',
+                  lineHeight: '1.5'
+                }}
+                onKeyDown={(e) => {
+                  // Ensure Enter key works normally for new lines
+                  if (e.key === 'Enter') {
+                    // Explicitly allow default behavior for Enter key
+                    e.stopPropagation();
+                    // Don't prevent default - let the textarea handle it naturally
+                    return;
+                  }
+                }}
+              />
+              
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-3 mt-4">
+                <button
+                  onClick={resetInputState}
+                  className="px-4 py-2 bg-[#393837] text-[#ffffff] text-sm hover:opacity-50 transition-opacity duration-300"
+                >
+                  CANCEL
+                </button>
+                <button
+                  id="analyze-data-button"
+                  onClick={async () => {
+                    const textarea = document.getElementById('office-data-input') as HTMLTextAreaElement;
+                    const button = document.getElementById('analyze-data-button') as HTMLButtonElement;
+                    
+                    if (!textarea.value.trim()) {
+                      alert('Please enter some data to analyze');
+                      return;
+                    }
+
+                    if (!inputStateOffice?.uniqueId) {
+                      alert('Office ID not found');
+                      return;
+                    }
+
+                    // Show loading state
+                    const originalText = button.textContent;
+                    button.textContent = 'ANALYZING...';
+                    button.disabled = true;
+
+                    try {
+                      const response = await fetch('/api/input-analysis', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          officeId: inputStateOffice.uniqueId,
+                          inputText: textarea.value,
+                          officeName: inputStateOffice.name,
+                          officeAddress: inputStateOffice.address,
+                          country: config.country
+                        })
+                      });
+
+                      if (response.ok) {
+                        const result = await response.json();
+                        console.log('Input Analysis completed:', result);
+                        
+                        // Store the analysis result
+                        setInputAnalysisResult({
+                          projects: result.analysis.projects || [],
+                          team: result.analysis.team || {},
+                          relations: result.analysis.relations || {},
+                          funding: result.analysis.funding || {},
+                          clients: result.analysis.clients || {},
+                          originalLanguage: result.analysis.originalLanguage,
+                          translatedText: result.analysis.translatedText,
+                          analysisId: result.officeId || 'unknown',
+                          timestamp: new Date().toISOString(),
+                          firebaseSaveSuccess: result.firebaseSaveSuccess,
+                          firebaseError: result.firebaseError,
+                          feedback: result.feedback
+                        });
+                        
+                        // Show success message
+                        button.textContent = 'ANALYSIS COMPLETE!';
+                        button.className = button.className.replace('bg-blue-600', 'bg-green-600');
+                        
+                        // Clear the textarea
+                        textarea.value = '';
+                        
+                        // Close the input state after a short delay
+                        setTimeout(() => {
+                          resetInputState();
+                        }, 2000);
+                      } else {
+                        const error = await response.json();
+                        console.error('Input Analysis failed:', error);
+                        alert(`Analysis failed: ${error.error || 'Unknown error'}`);
+                      }
+                    } catch (error) {
+                      console.error('Error during input analysis:', error);
+                      alert('Failed to analyze data. Please try again.');
+                    } finally {
+                      // Reset button state
+                      setTimeout(() => {
+                        button.textContent = originalText;
+                        button.disabled = false;
+                        button.className = button.className.replace('bg-green-600', 'bg-blue-600');
+                      }, 2000);
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-[#ffffff] text-sm hover:opacity-50 transition-opacity duration-300"
+                >
+                  ANALYZE INPUT
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : inputAnalysisResult ? (
+          // Input Analysis Results State
+          <div className="h-full flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-medium text-[#ffffff]">ANALYSIS RESULTS</h2>
+              <button
+                onClick={() => setInputAnalysisResult(null)}
+                className="px-3 py-1 bg-[#393837] text-sm"
+              >
+                CLOSE
+              </button>
+            </div>
+            
+            {/* Analysis Summary */}
+            <div className="mb-6 p-4">
+              <div className="text-sm text-[#ffffff] space-y-1">
+                <div>Analysis ID: {inputAnalysisResult.analysisId}</div>
+                <div>Timestamp: {new Date(inputAnalysisResult.timestamp).toLocaleString()}</div>
+                <div className="font-medium text-[#ffffff]">
+                  Firebase Save: {inputAnalysisResult.firebaseSaveSuccess ? 'SUCCESS' : 'FAILED'}
+                </div>
+                {inputAnalysisResult.firebaseError && (
+                  <div className="text-[#ffffff] text-xs">Error: {inputAnalysisResult.firebaseError}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Merge Feedback */}
+            {inputAnalysisResult.feedback && (
+              <div className="mb-6 p-4">
+                <h3 className="text-md font-medium text-[#ffffff] mb-3">Merge Feedback</h3>
+                
+                {inputAnalysisResult.feedback.isNewAnalysis ? (
+                  <div className="text-sm text-[#ffffff] mb-3">
+                    This is a new analysis - all data was added successfully
+                  </div>
+                ) : (
+                  <div className="text-sm text-[#ffffff] mb-3">
+                    Analysis merged with existing data
+                  </div>
+                )}
+
+                {/* Project Feedback */}
+                {inputAnalysisResult.feedback.projects && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-[#ffffff] mb-2">Projects Summary</h4>
+                    <div className="grid grid-cols-3 gap-2 text-xs mb-3">
+                      <div className="text-[#ffffff]">
+                        Added: {inputAnalysisResult.feedback.summary?.totalProjectsAdded || 0}
+                      </div>
+                      <div className="text-[#ffffff]">
+                        Updated: {inputAnalysisResult.feedback.summary?.totalProjectsUpdated || 0}
+                      </div>
+                      <div className="text-[#ffffff]">
+                        Blocked: {inputAnalysisResult.feedback.summary?.totalProjectsBlocked || 0}
+                      </div>
+                    </div>
+
+                    {/* Added Projects */}
+                    {inputAnalysisResult.feedback.projects.added && inputAnalysisResult.feedback.projects.added.length > 0 && (
+                      <div className="mb-3">
+                        <div className="text-xs text-[#ffffff] font-medium mb-1">Added Projects:</div>
+                        <div className="space-y-1">
+                          {inputAnalysisResult.feedback.projects.added.map((project: any, index: number) => (
+                            <AddedProjectDetails key={index} project={project} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Updated Projects */}
+                    {inputAnalysisResult.feedback.projects.updated && inputAnalysisResult.feedback.projects.updated.length > 0 && (
+                      <div className="mb-3">
+                        <div className="text-xs text-[#ffffff] font-medium mb-1">Updated Projects:</div>
+                        <div className="space-y-1">
+                          {inputAnalysisResult.feedback.projects.updated.map((project: any, index: number) => (
+                            <UpdatedProjectDetails key={index} project={project} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Blocked Projects */}
+                    {inputAnalysisResult.feedback.projects.blocked && inputAnalysisResult.feedback.projects.blocked.length > 0 && (
+                      <div className="mb-3">
+                        <div className="text-xs text-[#ffffff] font-medium mb-1">Blocked Projects (Duplicates):</div>
+                        <div className="space-y-1">
+                          {inputAnalysisResult.feedback.projects.blocked.map((project: any, index: number) => (
+                            <BlockedProjectDetails key={index} project={project} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Other Sections Feedback */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="text-[#ffffff]">
+                    Team: {inputAnalysisResult.feedback.team?.updated ? 'Updated' : 'No changes'}
+                  </div>
+                  <div className="text-[#ffffff]">
+                    Relations: {inputAnalysisResult.feedback.relations?.updated ? 'Updated' : 'No changes'}
+                  </div>
+                  <div className="text-[#ffffff]">
+                    Funding: {inputAnalysisResult.feedback.funding?.updated ? 'Updated' : 'No changes'}
+                  </div>
+                  <div className="text-[#ffffff]">
+                    Clients: {inputAnalysisResult.feedback.clients?.updated ? 'Updated' : 'No changes'}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Results Display */}
+            <div className="flex-1 overflow-y-auto analysis-results-container space-y-4">
+              {/* Projects */}
+              {inputAnalysisResult.projects && inputAnalysisResult.projects.length > 0 && (
+                <div className="p-4">
+                  <h4 className="text-md font-medium text-[#ffffff] mb-3">Projects ({inputAnalysisResult.projects.length})</h4>
+                  <div className="space-y-2">
+                    {inputAnalysisResult.projects.map((project: any, index: number) => (
+                      <div key={index} className="p-3 text-sm">
+                        <div className="text-[#ffffff] font-medium">{project.name || 'Unnamed Project'}</div>
+                        {project.size && <div className="text-[#ffffff]">Size: {project.size}</div>}
+                        {project.location && <div className="text-[#ffffff]">Location: {project.location}</div>}
+                        {project.useCase && <div className="text-[#ffffff]">Use Case: {project.useCase}</div>}
+                        {project.description && <div className="text-[#ffffff]">Description: {project.description}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Team */}
+              {inputAnalysisResult.team && Object.keys(inputAnalysisResult.team).length > 0 && (
+                <div className="p-4">
+                  <h4 className="text-md font-medium text-[#ffffff] mb-3">Team Information</h4>
+                  <div className="p-3 text-sm space-y-1">
+                    {inputAnalysisResult.team.teamSize && (
+                      <div className="text-[#ffffff]">Team Size: {inputAnalysisResult.team.teamSize}</div>
+                    )}
+                    {inputAnalysisResult.team.numberOfPeople && (
+                      <div className="text-[#ffffff]">Number of People: {inputAnalysisResult.team.numberOfPeople}</div>
+                    )}
+                    {inputAnalysisResult.team.specificArchitects && inputAnalysisResult.team.specificArchitects.length > 0 && (
+                      <div className="text-[#ffffff]">Architects: {inputAnalysisResult.team.specificArchitects.join(', ')}</div>
+                    )}
+                    {inputAnalysisResult.team.roles && inputAnalysisResult.team.roles.length > 0 && (
+                      <div className="text-[#ffffff]">Roles: {inputAnalysisResult.team.roles.join(', ')}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Relations */}
+              {inputAnalysisResult.relations && Object.keys(inputAnalysisResult.relations).length > 0 && (
+                <div className="p-4">
+                  <h4 className="text-md font-medium text-[#ffffff] mb-3">Relations</h4>
+                  <div className="p-3 text-sm space-y-1">
+                    {inputAnalysisResult.relations.constructionCompanies && inputAnalysisResult.relations.constructionCompanies.length > 0 && (
+                      <div className="text-[#ffffff]">Construction Companies: {inputAnalysisResult.relations.constructionCompanies.join(', ')}</div>
+                    )}
+                    {inputAnalysisResult.relations.otherArchOffices && inputAnalysisResult.relations.otherArchOffices.length > 0 && (
+                      <div className="text-[#ffffff]">Other Architecture Offices: {inputAnalysisResult.relations.otherArchOffices.join(', ')}</div>
+                    )}
+                    {inputAnalysisResult.relations.partners && inputAnalysisResult.relations.partners.length > 0 && (
+                      <div className="text-[#ffffff]">Partners: {inputAnalysisResult.relations.partners.join(', ')}</div>
+                    )}
+                    {inputAnalysisResult.relations.collaborators && inputAnalysisResult.relations.collaborators.length > 0 && (
+                      <div className="text-[#ffffff]">Collaborators: {inputAnalysisResult.relations.collaborators.join(', ')}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Funding */}
+              {inputAnalysisResult.funding && Object.keys(inputAnalysisResult.funding).length > 0 && (
+                <div className="p-4">
+                  <h4 className="text-md font-medium text-[#ffffff] mb-3">Funding Information</h4>
+                  <div className="p-3 text-sm space-y-1">
+                    {inputAnalysisResult.funding.budget && (
+                      <div className="text-[#ffffff]">Budget: {inputAnalysisResult.funding.budget}</div>
+                    )}
+                    {inputAnalysisResult.funding.fundingSources && inputAnalysisResult.funding.fundingSources.length > 0 && (
+                      <div className="text-[#ffffff]">Funding Sources: {inputAnalysisResult.funding.fundingSources.join(', ')}</div>
+                    )}
+                    {inputAnalysisResult.funding.financialInfo && (
+                      <div className="text-[#ffffff]">Financial Info: {inputAnalysisResult.funding.financialInfo}</div>
+                    )}
+                    {inputAnalysisResult.funding.investmentDetails && (
+                      <div className="text-[#ffffff]">Investment Details: {inputAnalysisResult.funding.investmentDetails}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Clients */}
+              {inputAnalysisResult.clients && Object.keys(inputAnalysisResult.clients).length > 0 && (
+                <div className="p-4">
+                  <h4 className="text-md font-medium text-[#ffffff] mb-3">Client Information</h4>
+                  <div className="p-3 text-sm space-y-1">
+                    {inputAnalysisResult.clients.pastClients && inputAnalysisResult.clients.pastClients.length > 0 && (
+                      <div className="text-[#ffffff]">Past Clients: {inputAnalysisResult.clients.pastClients.join(', ')}</div>
+                    )}
+                    {inputAnalysisResult.clients.presentClients && inputAnalysisResult.clients.presentClients.length > 0 && (
+                      <div className="text-[#ffffff]">Present Clients: {inputAnalysisResult.clients.presentClients.join(', ')}</div>
+                    )}
+                    {inputAnalysisResult.clients.clientTypes && inputAnalysisResult.clients.clientTypes.length > 0 && (
+                      <div className="text-[#ffffff]">Client Types: {inputAnalysisResult.clients.clientTypes.join(', ')}</div>
+                    )}
+                    {inputAnalysisResult.clients.clientIndustries && inputAnalysisResult.clients.clientIndustries.length > 0 && (
+                      <div className="text-[#ffffff]">Client Industries: {inputAnalysisResult.clients.clientIndustries.join(', ')}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
             </div>
           </div>
         ) : (
@@ -553,14 +1215,16 @@ export default function Section1({
                                         </td>
                                         <td className="py-0 pl-[5px] text-[#ffffff] border-r border-gray-500">
                                           {office.website ? (
-                                            <a
-                                              href={office.website.startsWith('http') ? office.website : `https://${office.website}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="text-[#ffffff] cursor-pointer"
-                                            >
-                                              {office.website.replace(/^https?:\/\//, '')}
-                                            </a>
+                                            createTrackedLink(
+                                              office.website.startsWith('http') ? office.website : `https://${office.website}`,
+                                              office.website.replace(/^https?:\/\//, ''),
+                                              {
+                                                officeId: office.uniqueId || `${office.name}-${office.address}`,
+                                                officeName: office.name,
+                                                website: office.website
+                                              },
+                                              "text-[#ffffff] cursor-pointer"
+                                            )
                                           ) : '-'}
                                         </td>
                                         <td className="py-0 pl-[5px] text-[#ffffff]">

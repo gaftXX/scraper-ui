@@ -15,6 +15,26 @@ export interface ArchitectureOffice {
   existedInDatabase?: boolean; // Added to track if office was already in database
   businessLabels?: string[]; // Added to track Google Maps business labels for validation
   uniqueId?: string; // Added for Spanish offices (B---S format)
+  modifiedName?: string; // Added for custom office names
+  
+  // Custom data fields that should be preserved during scraping
+  customData?: {
+    modifiedName?: string;
+    customDescription?: string;
+    notes?: string;
+    tags?: string[];
+    customFields?: Record<string, any>;
+    lastModified?: Date;
+    modifiedBy?: string;
+  };
+  
+  // Metadata for tracking data preservation
+  metadata?: {
+    scrapedAt?: Date;
+    lastUpdated?: Date;
+    dataVersion?: number;
+    customDataExists?: boolean;
+  };
 }
 
 // **PROGRESS TRACKING**
@@ -301,4 +321,127 @@ export interface ScrapingTiming {
   timestamp: Date;
   categories: SearchCategory[]; // Add categories field
   categoryKey: string; // Add categoryKey for unique identification
+}
+
+// **PROJECT DATA STRUCTURES**
+export interface ProjectData {
+  id: string;
+  officeId: string; // Reference to the architecture office
+  name: string;
+  description?: string;
+  location?: string;
+  type?: string; // residential, commercial, etc.
+  status?: string; // completed, in-progress, planned
+  size?: string; // square meters, etc.
+  year?: number;
+  budget?: string;
+  sustainability?: string[];
+  images?: string[];
+  awards?: string[];
+  publications?: string[];
+  team?: string[];
+  client?: string;
+  collaborators?: string[];
+  tags?: string[];
+  customFields?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
+export interface ProjectCategory {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+}
+
+export interface ProjectCollection {
+  id: string;
+  officeId: string;
+  name: string;
+  description?: string;
+  projects: ProjectData[];
+  categories: ProjectCategory[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// **INPUT ANALYSIS DATA STRUCTURES**
+export interface OfficeAnalysis {
+  id: string;
+  officeId: string;
+  originalText: string;
+  analyzedAt: Date;
+  officeName: string;
+  officeAddress?: string;
+  projects: ProjectAnalysis[];
+  team: TeamAnalysis;
+  relations: RelationsAnalysis;
+  funding: FundingAnalysis;
+  clients: ClientAnalysis;
+  confidence: number;
+  analysisNotes?: string;
+  originalLanguage?: string;
+  translatedText?: string;
+}
+
+export interface ProjectAnalysis {
+  name: string;
+  size?: string;
+  location?: string;
+  useCase?: string;
+  description?: string;
+}
+
+export interface TeamAnalysis {
+  teamSize?: string;
+  numberOfPeople?: number;
+  specificArchitects?: string[];
+  roles?: string[];
+}
+
+export interface RelationsAnalysis {
+  constructionCompanies?: string[];
+  otherArchOffices?: string[];
+  partners?: string[];
+  collaborators?: string[];
+}
+
+export interface FundingAnalysis {
+  budget?: string;
+  fundingSources?: string[];
+  financialInfo?: string;
+  investmentDetails?: string;
+}
+
+export interface ClientAnalysis {
+  pastClients?: string[];
+  presentClients?: string[];
+  clientTypes?: string[];
+  clientIndustries?: string[];
+}
+
+// **CLICK TRACKING DATA STRUCTURES**
+export interface WebsiteClick {
+  id: string;
+  officeId: string;
+  officeName: string;
+  website: string;
+  clickedAt: Date;
+  userAgent?: string;
+  ipAddress?: string;
+  referrer?: string;
+  sessionId?: string;
+}
+
+export interface ClickTrackingStats {
+  officeId: string;
+  officeName: string;
+  totalClicks: number;
+  uniqueSessions: number;
+  lastClickedAt: Date;
+  clickHistory: WebsiteClick[];
 } 
