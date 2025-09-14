@@ -1438,13 +1438,14 @@ export class FirebaseService {
   }
 
   /**
-   * Enhanced project duplicate detection
+   * Enhanced project duplicate detection with multi-factor analysis
    */
   private findProjectDuplicate(existingProjects: any[], newProject: any): { isDuplicate: boolean; exactMatch: boolean; reason: string; index: number } {
     const newName = newProject.name?.toLowerCase().trim() || '';
     const newDescription = newProject.description?.toLowerCase().trim() || '';
     const newLocation = newProject.location?.toLowerCase().trim() || '';
     const newUseCase = newProject.useCase?.toLowerCase().trim() || '';
+    const newSize = newProject.size?.toLowerCase().trim() || '';
 
     for (let i = 0; i < existingProjects.length; i++) {
       const existing = existingProjects[i];
@@ -1452,61 +1453,106 @@ export class FirebaseService {
       const existingDescription = existing.description?.toLowerCase().trim() || '';
       const existingLocation = existing.location?.toLowerCase().trim() || '';
       const existingUseCase = existing.useCase?.toLowerCase().trim() || '';
+      const existingSize = existing.size?.toLowerCase().trim() || '';
 
-      // 1. Exact name match
+      // 1. Exact name match - only if ALL other factors are also identical
       if (newName === existingName && newName.length > 0) {
-        return {
-          isDuplicate: true,
-          exactMatch: true,
-          reason: 'exact name match',
-          index: i
-        };
-      }
-
-      // 2. Exact description match (if both have descriptions)
-      if (newDescription === existingDescription && newDescription.length > 10) {
-        return {
-          isDuplicate: true,
-          exactMatch: true,
-          reason: 'exact description match',
-          index: i
-        };
-      }
-
-      // 3. Name similarity check (fuzzy matching)
-      if (this.isSimilarProjectName(newName, existingName)) {
-        return {
-          isDuplicate: true,
-          exactMatch: false,
-          reason: 'similar project name',
-          index: i
-        };
-      }
-
-      // 4. Description similarity check
-      if (newDescription.length > 10 && existingDescription.length > 10) {
-        const similarity = this.calculateDescriptionSimilarity(newDescription, existingDescription);
-        if (similarity > 0.8) { // 80% similarity threshold
+        // Check if this is truly the same project by comparing other factors
+        const factorsMatch = this.compareProjectFactors(newProject, existing);
+        if (factorsMatch.overallMatch > 0.9) { // 90% match across all factors
           return {
             isDuplicate: true,
-            exactMatch: false,
-            reason: `high description similarity (${Math.round(similarity * 100)}%)`,
+            exactMatch: true,
+            reason: 'exact name match with identical project factors',
             index: i
           };
+        } else {
+          // Same name but different project - don't merge
+          console.log(`Same name but different projects: ${newName}. Factors match: ${Math.round(factorsMatch.overallMatch * 100)}%`);
+          continue;
         }
       }
 
-      // 5. Same location + use case combination
-      if (newLocation === existingLocation && newUseCase === existingUseCase && 
-          newLocation.length > 0 && newUseCase.length > 0) {
-        // Additional check: are the names somewhat related?
-        if (this.areNamesRelated(newName, existingName)) {
+      // 2. Exact description match (if both have descriptions) - only if other factors align
+      if (newDescription === existingDescription && newDescription.length > 10) {
+        const factorsMatch = this.compareProjectFactors(newProject, existing);
+        if (factorsMatch.overallMatch > 0.8) { // 80% match for description-based detection
+          return {
+            isDuplicate: true,
+            exactMatch: true,
+            reason: 'exact description match with aligned project factors',
+            index: i
+          };
+        } else {
+          console.log(`Same description but different projects. Factors match: ${Math.round(factorsMatch.overallMatch * 100)}%`);
+          continue;
+        }
+      }
+
+      // 3. Enhanced name similarity check with factor validation
+      if (this.isSimilarProjectName(newName, existingName)) {
+        const factorsMatch = this.compareProjectFactors(newProject, existing);
+        
+        // Only consider it a duplicate if the factors strongly suggest it's the same project
+        if (factorsMatch.overallMatch > 0.85) { // 85% match required for similar names
           return {
             isDuplicate: true,
             exactMatch: false,
-            reason: 'same location + use case with related names',
+            reason: `similar project name with strong factor alignment (${Math.round(factorsMatch.overallMatch * 100)}%)`,
             index: i
           };
+        } else {
+          console.log(`Similar names but different projects: ${newName} vs ${existingName}. Factors match: ${Math.round(factorsMatch.overallMatch * 100)}%`);
+          continue;
+        }
+      }
+
+      // 4. Description similarity check with factor validation
+      if (newDescription.length > 10 && existingDescription.length > 10) {
+        const similarity = this.calculateDescriptionSimilarity(newDescription, existingDescription);
+        if (similarity > 0.8) { // 80% similarity threshold
+          const factorsMatch = this.compareProjectFactors(newProject, existing);
+          
+          // Only merge if factors also align
+          if (factorsMatch.overallMatch > 0.75) { // 75% match required for description similarity
+            return {
+              isDuplicate: true,
+              exactMatch: false,
+              reason: `high description similarity (${Math.round(similarity * 100)}%) with factor alignment (${Math.round(factorsMatch.overallMatch * 100)}%)`,
+              index: i
+            };
+          } else {
+            console.log(`Similar descriptions but different projects. Description similarity: ${Math.round(similarity * 100)}%, Factors match: ${Math.round(factorsMatch.overallMatch * 100)}%`);
+            continue;
+          }
+        }
+      }
+
+      // 5. Same location + use case combination - now with stricter requirements
+      if (newLocation === existingLocation && newUseCase === existingUseCase && 
+          newLocation.length > 0 && newUseCase.length > 0) {
+        
+        // Check if sizes are significantly different (different projects)
+        const sizeDifference = this.compareProjectSizes(newSize, existingSize);
+        if (sizeDifference.isSignificantlyDifferent) {
+          console.log(`Same location/use case but significantly different sizes: ${newSize} vs ${existingSize}. Not merging.`);
+          continue;
+        }
+        
+        // Additional check: are the names somewhat related AND factors align?
+        if (this.areNamesRelated(newName, existingName)) {
+          const factorsMatch = this.compareProjectFactors(newProject, existing);
+          if (factorsMatch.overallMatch > 0.8) { // 80% match required
+            return {
+              isDuplicate: true,
+              exactMatch: false,
+              reason: 'same location + use case with related names and aligned factors',
+              index: i
+            };
+          } else {
+            console.log(`Same location/use case with related names but different factors. Factors match: ${Math.round(factorsMatch.overallMatch * 100)}%`);
+            continue;
+          }
         }
       }
     }
@@ -1517,6 +1563,266 @@ export class FirebaseService {
       reason: 'no duplicate found',
       index: -1
     };
+  }
+
+  /**
+   * Compare multiple project factors to determine if they represent the same project
+   */
+  private compareProjectFactors(project1: any, project2: any): { overallMatch: number; factorScores: any } {
+    const factors = {
+      name: this.calculateNameSimilarity(project1.name || '', project2.name || ''),
+      description: this.calculateDescriptionSimilarity(project1.description || '', project2.description || ''),
+      location: this.calculateLocationSimilarity(project1.location || '', project2.location || ''),
+      useCase: this.calculateUseCaseSimilarity(project1.useCase || '', project2.useCase || ''),
+      size: this.calculateSizeSimilarity(project1.size || '', project2.size || ''),
+      status: this.calculateStatusSimilarity(project1.status || '', project2.status || '')
+    };
+
+    // Weighted scoring - some factors are more important than others
+    const weights = {
+      name: 0.25,        // Name is important but not definitive
+      description: 0.20,  // Description is very important
+      location: 0.20,     // Location is very important
+      useCase: 0.15,      // Use case is important
+      size: 0.15,         // Size is important for distinguishing projects
+      status: 0.05        // Status is least important (can change)
+    };
+
+    const overallMatch = Object.keys(factors).reduce((total, key) => {
+      return total + (factors[key] * weights[key]);
+    }, 0);
+
+    return {
+      overallMatch,
+      factorScores: factors
+    };
+  }
+
+  /**
+   * Compare project sizes to detect significantly different projects
+   */
+  private compareProjectSizes(size1: string, size2: string): { isSignificantlyDifferent: boolean; difference: number } {
+    if (!size1 || !size2) {
+      return { isSignificantlyDifferent: false, difference: 0 };
+    }
+
+    // Extract numeric values from size strings
+    const extractNumericSize = (size: string): number => {
+      const match = size.match(/(\d+(?:\.\d+)?)/);
+      return match ? parseFloat(match[1]) : 0;
+    };
+
+    const num1 = extractNumericSize(size1);
+    const num2 = extractNumericSize(size2);
+
+    if (num1 === 0 || num2 === 0) {
+      return { isSignificantlyDifferent: false, difference: 0 };
+    }
+
+    const difference = Math.abs(num1 - num2) / Math.max(num1, num2);
+    
+    // Consider significantly different if size difference is more than 50%
+    const isSignificantlyDifferent = difference > 0.5;
+
+    return {
+      isSignificantlyDifferent,
+      difference
+    };
+  }
+
+  /**
+   * Calculate name similarity with enhanced logic
+   */
+  private calculateNameSimilarity(name1: string, name2: string): number {
+    if (!name1 || !name2) return 0;
+    
+    const n1 = name1.toLowerCase().trim();
+    const n2 = name2.toLowerCase().trim();
+    
+    if (n1 === n2) return 1.0;
+    
+    // Check for common variations
+    const variations = [
+      ['center', 'centre'],
+      ['theater', 'theatre'],
+      ['parking', 'park'],
+      ['building', 'bldg'],
+      ['street', 'st'],
+      ['avenue', 'ave'],
+      ['boulevard', 'blvd']
+    ];
+    
+    let adjusted1 = n1;
+    let adjusted2 = n2;
+    
+    variations.forEach(([a, b]) => {
+      adjusted1 = adjusted1.replace(new RegExp(`\\b${a}\\b`, 'g'), b);
+      adjusted2 = adjusted2.replace(new RegExp(`\\b${a}\\b`, 'g'), b);
+    });
+    
+    if (adjusted1 === adjusted2) return 0.95;
+    
+    // Use Levenshtein distance for fuzzy matching
+    return this.calculateLevenshteinSimilarity(n1, n2);
+  }
+
+  /**
+   * Calculate location similarity
+   */
+  private calculateLocationSimilarity(loc1: string, loc2: string): number {
+    if (!loc1 || !loc2) return 0;
+    
+    const l1 = loc1.toLowerCase().trim();
+    const l2 = loc2.toLowerCase().trim();
+    
+    if (l1 === l2) return 1.0;
+    
+    // Check if one location contains the other (for different levels of detail)
+    if (l1.includes(l2) || l2.includes(l1)) return 0.8;
+    
+    // Check for same city/area
+    const city1 = l1.split(',')[0].trim();
+    const city2 = l2.split(',')[0].trim();
+    
+    if (city1 === city2) return 0.7;
+    
+    return this.calculateLevenshteinSimilarity(l1, l2);
+  }
+
+  /**
+   * Calculate use case similarity
+   */
+  private calculateUseCaseSimilarity(use1: string, use2: string): number {
+    if (!use1 || !use2) return 0;
+    
+    const u1 = use1.toLowerCase().trim();
+    const u2 = use2.toLowerCase().trim();
+    
+    if (u1 === u2) return 1.0;
+    
+    // Check for similar categories
+    const categories = {
+      residential: ['housing', 'apartment', 'home', 'residential'],
+      commercial: ['office', 'business', 'commercial', 'retail'],
+      cultural: ['museum', 'theater', 'theatre', 'cultural', 'art'],
+      sports: ['sports', 'gym', 'fitness', 'pool', 'stadium'],
+      educational: ['school', 'university', 'education', 'academic'],
+      healthcare: ['hospital', 'clinic', 'medical', 'healthcare'],
+      public: ['public', 'municipal', 'government', 'civic']
+    };
+    
+    for (const [category, keywords] of Object.entries(categories)) {
+      const has1 = keywords.some(keyword => u1.includes(keyword));
+      const has2 = keywords.some(keyword => u2.includes(keyword));
+      
+      if (has1 && has2) return 0.8;
+    }
+    
+    return this.calculateLevenshteinSimilarity(u1, u2);
+  }
+
+  /**
+   * Calculate size similarity
+   */
+  private calculateSizeSimilarity(size1: string, size2: string): number {
+    if (!size1 || !size2) return 0;
+    
+    const s1 = size1.toLowerCase().trim();
+    const s2 = size2.toLowerCase().trim();
+    
+    if (s1 === s2) return 1.0;
+    
+    // Extract numeric values and compare
+    const extractNumericSize = (size: string): number => {
+      const match = size.match(/(\d+(?:\.\d+)?)/);
+      return match ? parseFloat(match[1]) : 0;
+    };
+
+    const num1 = extractNumericSize(s1);
+    const num2 = extractNumericSize(s2);
+
+    if (num1 === 0 || num2 === 0) {
+      return this.calculateLevenshteinSimilarity(s1, s2);
+    }
+
+    const difference = Math.abs(num1 - num2) / Math.max(num1, num2);
+    
+    // Return similarity based on size difference
+    return Math.max(0, 1 - difference);
+  }
+
+  /**
+   * Calculate status similarity
+   */
+  private calculateStatusSimilarity(status1: string, status2: string): number {
+    if (!status1 || !status2) return 0;
+    
+    const s1 = status1.toLowerCase().trim();
+    const s2 = status2.toLowerCase().trim();
+    
+    if (s1 === s2) return 1.0;
+    
+    // Status can change, so be more lenient
+    const statusGroups = {
+      active: ['completed', 'in-progress', 'active', 'ongoing'],
+      planning: ['planning', 'design', 'proposed', 'planned'],
+      inactive: ['cancelled', 'on-hold', 'suspended', 'inactive']
+    };
+    
+    for (const [group, statuses] of Object.entries(statusGroups)) {
+      const has1 = statuses.includes(s1);
+      const has2 = statuses.includes(s2);
+      
+      if (has1 && has2) return 0.8;
+    }
+    
+    return 0.5; // Default moderate similarity for different statuses
+  }
+
+  /**
+   * Calculate Levenshtein similarity between two strings
+   */
+  private calculateLevenshteinSimilarity(str1: string, str2: string): number {
+    if (!str1 || !str2) return 0;
+    if (str1 === str2) return 1.0;
+    
+    const len1 = str1.length;
+    const len2 = str2.length;
+    
+    if (len1 === 0) return len2 === 0 ? 1.0 : 0;
+    if (len2 === 0) return 0;
+    
+    // Create a matrix to store distances
+    const matrix: number[][] = [];
+    
+    // Initialize first row and column
+    for (let i = 0; i <= len2; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= len1; j++) {
+      matrix[0][j] = j;
+    }
+    
+    // Fill the matrix
+    for (let i = 1; i <= len2; i++) {
+      for (let j = 1; j <= len1; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            matrix[i][j - 1] + 1,     // insertion
+            matrix[i - 1][j] + 1      // deletion
+          );
+        }
+      }
+    }
+    
+    const distance = matrix[len2][len1];
+    const maxLength = Math.max(len1, len2);
+    
+    // Return similarity as a percentage (0-1)
+    return Math.max(0, 1 - (distance / maxLength));
   }
 
   /**

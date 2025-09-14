@@ -203,6 +203,298 @@ function validateAndCleanAnalysisResult(result: InputAnalysisResult): InputAnaly
   return cleaned;
 }
 
+// Function to process database editing instructions from input text
+async function processDatabaseEditInstructions(inputText: string, officeId: string, officeName: string, officeAddress?: string): Promise<{ success: boolean; instructions: string[]; results: any[] }> {
+  const instructions: string[] = [];
+  const results: any[] = [];
+  
+  // Extract instructions wrapped in // text //
+  const instructionRegex = /\/\/\s*([^\/]+?)\s*\/\//g;
+  let match;
+  
+  while ((match = instructionRegex.exec(inputText)) !== null) {
+    const instruction = match[1].trim();
+    if (instruction) {
+      instructions.push(instruction);
+    }
+  }
+  
+  if (instructions.length === 0) {
+    return { success: true, instructions: [], results: [] };
+  }
+  
+  console.log('Found database edit instructions:', instructions);
+  
+  try {
+    const { FirebaseService } = await import('../../../../scraper-backend/services/firebaseService');
+    
+    const firebaseService = new FirebaseService({
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+      privateKey: process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+      clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL!,
+      databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
+    });
+    
+    // Process each instruction
+    for (const instruction of instructions) {
+      try {
+        const result = await executeDatabaseInstruction(instruction, officeId, officeName, officeAddress, firebaseService);
+        results.push({ instruction, result, success: true });
+        console.log(`Executed instruction: ${instruction}`, result);
+      } catch (error) {
+        console.error(`Failed to execute instruction: ${instruction}`, error);
+        results.push({ 
+          instruction, 
+          result: null, 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
+    }
+    
+    return { success: true, instructions, results };
+  } catch (error) {
+    console.error('Error processing database edit instructions:', error);
+    return { 
+      success: false, 
+      instructions, 
+      results: [{ 
+        instruction: 'Initialization failed', 
+        result: null, 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }] 
+    };
+  }
+}
+
+// Function to execute individual database instructions
+async function executeDatabaseInstruction(instruction: string, officeId: string, officeName: string, officeAddress: string | undefined, firebaseService: any): Promise<any> {
+  const lowerInstruction = instruction.toLowerCase().trim();
+  
+  // Parse instruction types
+  if (lowerInstruction.includes('delete project') || lowerInstruction.includes('remove project')) {
+    return await handleDeleteProject(instruction, officeId, firebaseService);
+  } else if (lowerInstruction.includes('update project') || lowerInstruction.includes('modify project')) {
+    return await handleUpdateProject(instruction, officeId, firebaseService);
+  } else if (lowerInstruction.includes('add project') || lowerInstruction.includes('create project')) {
+    return await handleAddProject(instruction, officeId, firebaseService);
+  } else if (lowerInstruction.includes('update office') || lowerInstruction.includes('modify office')) {
+    return await handleUpdateOffice(instruction, officeId, firebaseService);
+  } else if (lowerInstruction.includes('delete office') || lowerInstruction.includes('remove office')) {
+    return await handleDeleteOffice(instruction, officeId, firebaseService);
+  } else {
+    throw new Error(`Unknown instruction type: ${instruction}`);
+  }
+}
+
+// Handle delete project instruction
+async function handleDeleteProject(instruction: string, officeId: string, firebaseService: any): Promise<any> {
+  // Extract project name from instruction
+  const projectNameMatch = instruction.match(/(?:delete|remove)\s+project\s+["']?([^"']+)["']?/i);
+  if (!projectNameMatch) {
+    throw new Error('Project name not found in delete instruction');
+  }
+  
+  const projectName = projectNameMatch[1].trim();
+  
+  // Get current analysis data
+  const currentAnalysis = await firebaseService.getLatestOfficeAnalysis(officeId, 'spain');
+  if (!currentAnalysis || !currentAnalysis.projects) {
+    throw new Error('No analysis data found for office');
+  }
+  
+  // Find and remove the project
+  const updatedProjects = currentAnalysis.projects.filter((project: any) => 
+    project.name?.toLowerCase().trim() !== projectName.toLowerCase().trim()
+  );
+  
+  if (updatedProjects.length === currentAnalysis.projects.length) {
+    throw new Error(`Project "${projectName}" not found`);
+  }
+  
+  // Update the analysis with removed project
+  const updatedAnalysis = {
+    ...currentAnalysis,
+    projects: updatedProjects,
+    lastUpdated: new Date()
+  };
+  
+  await firebaseService.saveOfficeAnalysis(officeId, updatedAnalysis, 'spain');
+  
+  return {
+    action: 'delete_project',
+    projectName,
+    removed: true,
+    remainingProjects: updatedProjects.length
+  };
+}
+
+// Handle update project instruction
+async function handleUpdateProject(instruction: string, officeId: string, firebaseService: any): Promise<any> {
+  // Extract project name and updates from instruction
+  const updateMatch = instruction.match(/(?:update|modify)\s+project\s+["']?([^"']+)["']?\s+(.+)/i);
+  if (!updateMatch) {
+    throw new Error('Project name and updates not found in update instruction');
+  }
+  
+  const projectName = updateMatch[1].trim();
+  const updates = updateMatch[2].trim();
+  
+  // Get current analysis data
+  const currentAnalysis = await firebaseService.getLatestOfficeAnalysis(officeId, 'spain');
+  if (!currentAnalysis || !currentAnalysis.projects) {
+    throw new Error('No analysis data found for office');
+  }
+  
+  // Find the project to update
+  const projectIndex = currentAnalysis.projects.findIndex((project: any) => 
+    project.name?.toLowerCase().trim() === projectName.toLowerCase().trim()
+  );
+  
+  if (projectIndex === -1) {
+    throw new Error(`Project "${projectName}" not found`);
+  }
+  
+  // Parse updates (simple key:value format)
+  const updatePairs = updates.split(',').map(pair => pair.trim());
+  const updateData: any = {};
+  
+  for (const pair of updatePairs) {
+    const [key, value] = pair.split(':').map(s => s.trim());
+    if (key && value) {
+      updateData[key] = value;
+    }
+  }
+  
+  // Update the project
+  const updatedProjects = [...currentAnalysis.projects];
+  updatedProjects[projectIndex] = {
+    ...updatedProjects[projectIndex],
+    ...updateData
+  };
+  
+  // Update the analysis
+  const updatedAnalysis = {
+    ...currentAnalysis,
+    projects: updatedProjects,
+    lastUpdated: new Date()
+  };
+  
+  await firebaseService.saveOfficeAnalysis(officeId, updatedAnalysis, 'spain');
+  
+  return {
+    action: 'update_project',
+    projectName,
+    updates: updateData,
+    updated: true
+  };
+}
+
+// Handle add project instruction
+async function handleAddProject(instruction: string, officeId: string, firebaseService: any): Promise<any> {
+  // Extract project details from instruction
+  const addMatch = instruction.match(/(?:add|create)\s+project\s+["']?([^"']+)["']?\s+(.+)/i);
+  if (!addMatch) {
+    throw new Error('Project name and details not found in add instruction');
+  }
+  
+  const projectName = addMatch[1].trim();
+  const details = addMatch[2].trim();
+  
+  // Get current analysis data
+  const currentAnalysis = await firebaseService.getLatestOfficeAnalysis(officeId, 'spain');
+  if (!currentAnalysis) {
+    throw new Error('No analysis data found for office');
+  }
+  
+  // Parse project details
+  const detailPairs = details.split(',').map(pair => pair.trim());
+  const projectData: any = { name: projectName, status: 'planning' };
+  
+  for (const pair of detailPairs) {
+    const [key, value] = pair.split(':').map(s => s.trim());
+    if (key && value) {
+      projectData[key] = value;
+    }
+  }
+  
+  // Add the new project
+  const updatedProjects = [...(currentAnalysis.projects || []), projectData];
+  
+  // Update the analysis
+  const updatedAnalysis = {
+    ...currentAnalysis,
+    projects: updatedProjects,
+    lastUpdated: new Date()
+  };
+  
+  await firebaseService.saveOfficeAnalysis(officeId, updatedAnalysis, 'spain');
+  
+  return {
+    action: 'add_project',
+    projectName,
+    projectData,
+    added: true,
+    totalProjects: updatedProjects.length
+  };
+}
+
+// Handle update office instruction
+async function handleUpdateOffice(instruction: string, officeId: string, firebaseService: any): Promise<any> {
+  // Extract office updates from instruction
+  const updateMatch = instruction.match(/(?:update|modify)\s+office\s+(.+)/i);
+  if (!updateMatch) {
+    throw new Error('Office updates not found in update instruction');
+  }
+  
+  const updates = updateMatch[1].trim();
+  
+  // Get current analysis data
+  const currentAnalysis = await firebaseService.getLatestOfficeAnalysis(officeId, 'spain');
+  if (!currentAnalysis) {
+    throw new Error('No analysis data found for office');
+  }
+  
+  // Parse updates
+  const updatePairs = updates.split(',').map(pair => pair.trim());
+  const updateData: any = {};
+  
+  for (const pair of updatePairs) {
+    const [key, value] = pair.split(':').map(s => s.trim());
+    if (key && value) {
+      updateData[key] = value;
+    }
+  }
+  
+  // Update the analysis
+  const updatedAnalysis = {
+    ...currentAnalysis,
+    ...updateData,
+    lastUpdated: new Date()
+  };
+  
+  await firebaseService.saveOfficeAnalysis(officeId, updatedAnalysis, 'spain');
+  
+  return {
+    action: 'update_office',
+    updates: updateData,
+    updated: true
+  };
+}
+
+// Handle delete office instruction
+async function handleDeleteOffice(instruction: string, officeId: string, firebaseService: any): Promise<any> {
+  // Delete the entire office analysis
+  await firebaseService.deleteOfficeAnalysis(officeId, 'analysis_' + Date.now(), 'spain');
+  
+  return {
+    action: 'delete_office',
+    officeId,
+    deleted: true
+  };
+}
+
 // Function to determine country based on office address
 function determineCountryFromAddress(address: string, officeName: string): string {
   const addressLower = address.toLowerCase();
@@ -304,8 +596,8 @@ export async function POST(request: NextRequest) {
             'anthropic-version': '2023-06-01'
           },
           body: JSON.stringify({
-            model: 'claude-3-haiku-20240307',
-            max_tokens: 2000,
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 4000,
             messages: [
               {
                 role: 'user',
@@ -330,19 +622,23 @@ Analyze the following text about the architecture office "${officeName}"${office
 Input text:
 ${processedText}
 
+IMPORTANT: This text may contain structured project data with clear sections like CLIENT/OWNER, LOCATION, AREA, INTERVENTION COST, ARCHITECTS, WORK DONE, CAPACITY, DATE, etc. Extract ALL projects from this data, even if they are in a structured format.
+
 Please analyze and categorize the information into these sections:
 
 1. PROJECTS: Extract project information including:
-   - Project names
-   - Project sizes (square meters, area, etc.)
-   - Project locations
-   - Use cases (residential, commercial, etc.)
-   - Project descriptions
-   - Project status (completed, in-progress, planning)
+   - Project names (look for project titles in ALL CAPS or clearly marked sections)
+   - Project sizes (square meters, area, etc. - look for AREA fields)
+   - Project locations (look for LOCATION fields)
+   - Use cases (residential, commercial, sports, cultural, etc.)
+   - Project descriptions (combine WORK DONE and other descriptive text)
+   - Project status (completed, in-progress, planning - infer from dates)
+   - Budget/cost information (look for INTERVENTION COST fields)
+   - Client information (look for CLIENT/OWNER fields)
 
 2. TEAM: Extract team information including:
    - Team size (number of people, small/medium/large)
-   - Specific architect names
+   - Specific architect names (look for ARCHITECTS fields)
    - Roles and positions
    - Team structure
 
@@ -353,16 +649,18 @@ Please analyze and categorize the information into these sections:
    - Business relationships
 
 4. FUNDING: Extract financial information including:
-   - Budget information
+   - Budget information (look for INTERVENTION COST fields)
    - Funding sources
    - Financial details
    - Investment information
 
 5. CLIENTS: Extract client information including:
-   - Past clients
+   - Past clients (look for CLIENT/OWNER fields)
    - Present clients
    - Client types
    - Client industries
+
+CRITICAL: If you see structured data with clear project sections, extract EVERY project as a separate entry. Do not skip any projects. Each project should have its own entry in the projects array.
 
 Return the analysis as a JSON object with this exact structure:
 {
@@ -417,7 +715,7 @@ If information is not available for a category, use empty arrays or null values.
       },
       body: JSON.stringify({
         model: 'claude-3-haiku-20240307',
-        max_tokens: 2000,
+        max_tokens: 4000,
         messages: [
           {
             role: 'user',
@@ -473,6 +771,9 @@ If information is not available for a category, use empty arrays or null values.
     // Validate and clean the analysis result
     analysisResult = validateAndCleanAnalysisResult(analysisResult);
 
+    // Process database editing instructions from the input text
+    const databaseEditResult = await processDatabaseEditInstructions(processedText, officeId, officeName, officeAddress);
+
     // Determine country based on office address
     const officeCountry = determineCountryFromAddress(officeAddress || '', officeName);
 
@@ -524,7 +825,8 @@ If information is not available for a category, use empty arrays or null values.
       officeId,
       firebaseSaveSuccess,
       firebaseError,
-      feedback: saveResult?.feedback
+      feedback: saveResult?.feedback,
+      databaseEditResult
     });
 
     } catch (error) {

@@ -321,6 +321,87 @@ export default function Section1({
   inputAnalysisResult,
   setInputAnalysisResult
 }: Section1Props) {
+  const handleAnalysis = async () => {
+    const textarea = document.querySelector('textarea') as HTMLTextAreaElement;
+    if (!textarea) return;
+    
+    if (!textarea.value.trim()) {
+      alert('Please enter some data to analyze');
+      return;
+    }
+
+    if (!inputStateOffice?.uniqueId) {
+      alert('Office ID not found');
+      return;
+    }
+
+    // Show loading state by changing placeholder
+    const originalPlaceholder = textarea.placeholder;
+    textarea.placeholder = 'Analyzing data...';
+    textarea.disabled = true;
+
+    try {
+      const response = await fetch('/api/input-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          officeId: inputStateOffice.uniqueId,
+          inputText: textarea.value,
+          officeName: inputStateOffice.name,
+          officeAddress: inputStateOffice.address,
+          country: config.country
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Input Analysis completed:', result);
+        
+        // Store the analysis result
+        setInputAnalysisResult({
+          projects: result.analysis.projects || [],
+          team: result.analysis.team || {},
+          relations: result.analysis.relations || {},
+          funding: result.analysis.funding || {},
+          clients: result.analysis.clients || {},
+          originalLanguage: result.analysis.originalLanguage,
+          translatedText: result.analysis.translatedText,
+          analysisId: result.officeId || 'unknown',
+          timestamp: new Date().toISOString(),
+          firebaseSaveSuccess: result.firebaseSaveSuccess,
+          firebaseError: result.firebaseError,
+          feedback: result.feedback
+        });
+        
+        // Show success message
+        textarea.placeholder = 'Analysis complete! Closing...';
+        
+        // Clear the textarea
+        textarea.value = '';
+        
+        // Close the input state after a short delay
+        setTimeout(() => {
+          resetInputState();
+        }, 2000);
+      } else {
+        const error = await response.json();
+        console.error('Input Analysis failed:', error);
+        alert(`Analysis failed: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error during input analysis:', error);
+      alert('Failed to analyze data. Please try again.');
+    } finally {
+      // Reset textarea state
+      setTimeout(() => {
+        textarea.placeholder = originalPlaceholder;
+        textarea.disabled = false;
+      }, 2000);
+    }
+  };
+
   return (
     <div className="col-span-2 h-screen">
       <style jsx global>{`
@@ -718,7 +799,7 @@ export default function Section1({
           </div>
         ) : showInputState ? (
           // Input State UI
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col p-2">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-medium text-[#ffffff]">INPUT DATA</h2>
               <button
@@ -751,136 +832,34 @@ export default function Section1({
             
             {/* Large Text Input Area */}
             <div className="flex-1 flex flex-col">
-              <div className="mb-2">
-                <label className="text-sm text-[#ffffff] font-medium">
-                  ARCHITECTURE OFFICE DATA
-                </label>
-                <p className="text-xs text-gray-400 mt-1">
-                  Enter detailed information about this architecture office. The system will automatically analyze and categorize your input into Projects, Team, Relations, Funding, and Clients. You can input text in Spanish or English.
-                </p>
+              <div className="text-sm text-gray-400 mb-2">
+                Press Shift + Enter to analyze the data.
               </div>
               <textarea
                 id="office-data-input"
-                className="flex-1 w-full p-4 bg-[#2d3748] text-[#ffffff] border border-gray-600 rounded-lg resize-none focus:outline-none focus:border-blue-500"
-                placeholder="Enter detailed information about this architecture office..."
+                className="flex-1 w-full p-4 bg-transparent text-[#ffffff] border border-white resize-none focus:outline-none"
+                placeholder="input data"
                 style={{
                   fontFamily: 'Monaco, Menlo, Ubuntu Mono, Consolas, source-code-pro, monospace',
                   fontSize: '14px',
                   lineHeight: '1.5'
                 }}
                 onKeyDown={(e) => {
-                  // Ensure Enter key works normally for new lines
-                  if (e.key === 'Enter') {
-                    // Explicitly allow default behavior for Enter key
-                    e.stopPropagation();
-                    // Don't prevent default - let the textarea handle it naturally
-                    return;
+                  // Handle Shift+Enter for analysis
+                  if (e.key === 'Enter' && e.shiftKey) {
+                    e.preventDefault();
+                    
+                    // Call the analysis function
+                    handleAnalysis();
                   }
+                  // For all other keys (Enter, Arrow Down, Arrow Up), do nothing - let them work normally
                 }}
               />
-              
-              {/* Action Buttons */}
-              <div className="flex justify-end space-x-3 mt-4">
-                <button
-                  onClick={resetInputState}
-                  className="px-4 py-2 bg-[#393837] text-[#ffffff] text-sm hover:opacity-50 transition-opacity duration-300"
-                >
-                  CANCEL
-                </button>
-                <button
-                  id="analyze-data-button"
-                  onClick={async () => {
-                    const textarea = document.getElementById('office-data-input') as HTMLTextAreaElement;
-                    const button = document.getElementById('analyze-data-button') as HTMLButtonElement;
-                    
-                    if (!textarea.value.trim()) {
-                      alert('Please enter some data to analyze');
-                      return;
-                    }
-
-                    if (!inputStateOffice?.uniqueId) {
-                      alert('Office ID not found');
-                      return;
-                    }
-
-                    // Show loading state
-                    const originalText = button.textContent;
-                    button.textContent = 'ANALYZING...';
-                    button.disabled = true;
-
-                    try {
-                      const response = await fetch('/api/input-analysis', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                          officeId: inputStateOffice.uniqueId,
-                          inputText: textarea.value,
-                          officeName: inputStateOffice.name,
-                          officeAddress: inputStateOffice.address,
-                          country: config.country
-                        })
-                      });
-
-                      if (response.ok) {
-                        const result = await response.json();
-                        console.log('Input Analysis completed:', result);
-                        
-                        // Store the analysis result
-                        setInputAnalysisResult({
-                          projects: result.analysis.projects || [],
-                          team: result.analysis.team || {},
-                          relations: result.analysis.relations || {},
-                          funding: result.analysis.funding || {},
-                          clients: result.analysis.clients || {},
-                          originalLanguage: result.analysis.originalLanguage,
-                          translatedText: result.analysis.translatedText,
-                          analysisId: result.officeId || 'unknown',
-                          timestamp: new Date().toISOString(),
-                          firebaseSaveSuccess: result.firebaseSaveSuccess,
-                          firebaseError: result.firebaseError,
-                          feedback: result.feedback
-                        });
-                        
-                        // Show success message
-                        button.textContent = 'ANALYSIS COMPLETE!';
-                        button.className = button.className.replace('bg-blue-600', 'bg-green-600');
-                        
-                        // Clear the textarea
-                        textarea.value = '';
-                        
-                        // Close the input state after a short delay
-                        setTimeout(() => {
-                          resetInputState();
-                        }, 2000);
-                      } else {
-                        const error = await response.json();
-                        console.error('Input Analysis failed:', error);
-                        alert(`Analysis failed: ${error.error || 'Unknown error'}`);
-                      }
-                    } catch (error) {
-                      console.error('Error during input analysis:', error);
-                      alert('Failed to analyze data. Please try again.');
-                    } finally {
-                      // Reset button state
-                      setTimeout(() => {
-                        button.textContent = originalText;
-                        button.disabled = false;
-                        button.className = button.className.replace('bg-green-600', 'bg-blue-600');
-                      }, 2000);
-                    }
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-[#ffffff] text-sm hover:opacity-50 transition-opacity duration-300"
-                >
-                  ANALYZE INPUT
-                </button>
-              </div>
             </div>
           </div>
         ) : inputAnalysisResult ? (
           // Input Analysis Results State
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col p-2">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-medium text-[#ffffff]">ANALYSIS RESULTS</h2>
               <button

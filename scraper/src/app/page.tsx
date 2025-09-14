@@ -93,7 +93,7 @@ export default function ScraperInterface() {
   const [resetSection2Focus, setResetSection2Focus] = useState<number>(0);
   const [showInputState, setShowInputState] = useState(false);
   const [inputStateOffice, setInputStateOffice] = useState<any>(null);
-  const [inlookDisabled, setInlookDisabled] = useState(false);
+  const [inlookDisabled, setInlookDisabled] = useState(true);
   const [inputAnalysisResult, setInputAnalysisResult] = useState<any>(null);
   
   // Use a ref to store the latest config to avoid stale closure issues

@@ -975,7 +975,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
         
         {/* Inlook Popup */}
         {showOfficePopup && selectedRowIndex !== null && filteredData[selectedRowIndex] && (
-          <div className="absolute bottom-5 left-1/2 transform -translate-x-1/2 h-1/3 bg-[#393837] px-1 py-4 z-50 w-[95%]">
+          <div className="absolute bottom-5 left-1/2 transform -translate-x-1/2 bg-[#393837] px-1 py-4 z-50 w-[95%]" style={{ height: '48vh' }}>
             <style jsx>{`
               .popup-container {
                 scrollbar-width: none;  /* Firefox */
@@ -996,7 +996,7 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
               
               <div className="text-sm w-full flex flex-col h-full">
                 {/* Fixed Header - Office Name and Address */}
-                <div className="flex-shrink-0 mb-4 flex items-start justify-between">
+                <div className="flex-shrink-0 mb-2 flex items-start justify-between">
                   <div className="text-white font-medium break-words">{filteredData[selectedRowIndex].name}</div>
                   {filteredData[selectedRowIndex].address && (
                     <div className="text-white text-sm break-words text-right max-w-[60%]">{filteredData[selectedRowIndex].address}</div>
@@ -1051,12 +1051,12 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                   )}
                   </div>
                   
-                  {/* Projects Section - Only show for Spanish offices (B---S identifier) */}
+                  {/* Analysis Data Section - Only show for Spanish offices (B---S identifier) */}
                   {filteredData[selectedRowIndex]?.uniqueId?.startsWith('B') && filteredData[selectedRowIndex]?.uniqueId?.endsWith('S') && (
-                    <div className="mt-4">
+                    <div className="mt-4 space-y-4">
                       {(() => {
                         // Debug logging
-                        console.log('Projects section debug:', {
+                        console.log('Analysis section debug:', {
                           loadingAnalysis,
                           hasOfficeAnalysis: !!officeAnalysis,
                           projects: officeAnalysis?.projects,
@@ -1064,56 +1064,96 @@ export default function Section3({ showCompendium, results, formatElapsedTime, p
                         });
                         
                         if (loadingAnalysis) {
-                          return <div className="text-white text-sm">Loading projects...</div>;
-                        } else if (officeAnalysis && officeAnalysis.projects && Array.isArray(officeAnalysis.projects) && officeAnalysis.projects.length > 0) {
+                          return <div className="text-white text-sm">Loading analysis data...</div>;
+                        } else if (officeAnalysis) {
                           return (
-                            <div className="overflow-hidden">
-                              <table className="w-full text-sm">
-                                <tbody>
-                                  {officeAnalysis.projects.map((project: any, projectIndex: number) => (
-                                    <tr 
-                                      key={projectIndex} 
-                                      className="border-none hover:bg-gray-650 transition-all duration-300"
-                                      style={{ 
-                                        backgroundColor: 'transparent',
-                                        transition: 'background-color 0.3s ease'
-                                      }}
-                                    >
-                                      {/* Project Number */}
-                                      <td 
-                                        className="py-0 text-[#ffffff] cursor-pointer hover:opacity-50 transition-opacity duration-300"
-                                        style={{ width: '25px', textAlign: 'center' }}
-                                      >
-                                        {projectIndex + 1}
-                                      </td>
-                                      {/* Project Name */}
-                                      <td className="py-0 border-r border-white text-[#ffffff]" style={{ width: '550px' }}>
-                                        <div className="font-medium">
-                                          {project.name || 'Unnamed Project'}
-                                        </div>
-                                      </td>
-                                      {/* Project Size */}
-                                      <td className="py-0 pl-[5px] border-r border-white text-[#ffffff]" style={{ width: '120px' }}>
-                                        {project.size ? project.size.replace(/[^\d,/]/g, '') || '-' : '-'}
-                                      </td>
-                                      {/* Project Location */}
-                                      <td className="py-0 pl-[5px] border-r border-white text-[#ffffff]" style={{ width: '330px' }}>
-                                        {project.location || '-'}
-                                      </td>
-                                      {/* Project Status */}
-                                      <td className="py-0 pl-[5px] text-[#ffffff]">
-                                        {project.status || '-'}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                            <div className="space-y-4">
+                              {/* Projects Section */}
+                              {officeAnalysis.projects && Array.isArray(officeAnalysis.projects) && officeAnalysis.projects.length > 0 && (
+                                <div>
+                                  <div className="overflow-hidden">
+                                    <table className="w-full text-sm">
+                                      <tbody>
+                                        {officeAnalysis.projects.map((project: any, projectIndex: number) => (
+                                          <tr 
+                                            key={projectIndex} 
+                                            className="border-none hover:bg-gray-650 transition-all duration-300"
+                                            style={{ 
+                                              backgroundColor: 'transparent',
+                                              transition: 'background-color 0.3s ease'
+                                            }}
+                                          >
+                                            {/* Project Number */}
+                                            <td 
+                                              className="py-0 text-[#ffffff] cursor-pointer hover:opacity-50 transition-opacity duration-300"
+                                              style={{ width: '25px', textAlign: 'center' }}
+                                            >
+                                              {projectIndex + 1}
+                                            </td>
+                                            {/* Project Name */}
+                                            <td className="py-0 border-r border-white text-[#ffffff]" style={{ width: '550px' }}>
+                                              <div className="font-medium">
+                                                {project.name || 'Unnamed Project'}
+                                              </div>
+                                            </td>
+                                            {/* Project Size */}
+                                            <td className="py-0 pl-[5px] border-r border-white text-[#ffffff]" style={{ width: '120px' }}>
+                                              {project.size ? project.size.replace(/[^\d,/]/g, '') || '-' : '-'}
+                                            </td>
+                                            {/* Project Location */}
+                                            <td className="py-0 pl-[5px] border-r border-white text-[#ffffff]" style={{ width: '330px' }}>
+                                              {project.location || '-'}
+                                            </td>
+                                            {/* Project Status */}
+                                            <td className="py-0 pl-[5px] text-[#ffffff]">
+                                              {project.status || '-'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Team Section */}
+                              {officeAnalysis.team && Object.keys(officeAnalysis.team).length > 0 && (
+                                <div>
+                                  <div className="p-3 text-sm space-y-1">
+                                    {officeAnalysis.team.specificArchitects && officeAnalysis.team.specificArchitects.length > 0 && (
+                                      <div className="text-[#ffffff]">Architects: {officeAnalysis.team.specificArchitects.join(', ')}</div>
+                                    )}
+                                    {officeAnalysis.team.roles && officeAnalysis.team.roles.length > 0 && (
+                                      <div className="text-[#ffffff]">Roles: {officeAnalysis.team.roles.join(', ')}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Relations Section */}
+                              {officeAnalysis.relations && Object.keys(officeAnalysis.relations).length > 0 && (
+                                <div>
+                                  <div className="p-3 text-sm space-y-1">
+                                    {officeAnalysis.relations.constructionCompanies && officeAnalysis.relations.constructionCompanies.length > 0 && (
+                                      <div className="text-[#ffffff]">Construction Companies: {officeAnalysis.relations.constructionCompanies.join(', ')}</div>
+                                    )}
+                                    {officeAnalysis.relations.otherArchOffices && officeAnalysis.relations.otherArchOffices.length > 0 && (
+                                      <div className="text-[#ffffff]">Other Architecture Offices: {officeAnalysis.relations.otherArchOffices.join(', ')}</div>
+                                    )}
+                                    {officeAnalysis.relations.partners && officeAnalysis.relations.partners.length > 0 && (
+                                      <div className="text-[#ffffff]">Partners: {officeAnalysis.relations.partners.join(', ')}</div>
+                                    )}
+                                    {officeAnalysis.relations.collaborators && officeAnalysis.relations.collaborators.length > 0 && (
+                                      <div className="text-[#ffffff]">Collaborators: {officeAnalysis.relations.collaborators.join(', ')}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              
                             </div>
                           );
-                        } else if (officeAnalysis && (!officeAnalysis.projects || officeAnalysis.projects.length === 0)) {
-                          return <div className="text-white text-sm">No projects received</div>;
                         } else {
-                          return null;
+                          return <div className="text-white text-sm">No analysis data available</div>;
                         }
                       })()}
                     </div>
