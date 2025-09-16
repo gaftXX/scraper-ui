@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { GoogleMapsArchitectureScraper, DataOutput, FirebaseService } from './src/index';
+import { GoogleMapsArchitectureScraper, DataOutput, FirebaseService } from './transactions/scraper-backend/index';
 
 // Example 1: Basic usage - scrape all cities
 async function example1() {
